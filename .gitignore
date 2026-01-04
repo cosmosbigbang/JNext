@@ -1,0 +1,40 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Django
+db.sqlite3
+*.log
+staticfiles/
+media/
+
+# 환경 변수
+.env
+.env.local
+
+# Firebase 서비스 계정 키 (절대 커밋 금지!)
+*-service-account.json
+*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node modules (플러터/프론트엔드용)
+node_modules/
