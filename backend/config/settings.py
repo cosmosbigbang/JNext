@@ -207,10 +207,21 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', None)
 GPT_INITIALIZED = False
 # GPT_CLIENT 초기화는 향후 추가
 
-# Claude 설정 (향후 확장)
+# Claude 설정
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', None)
+CLAUDE_CLIENT = None
 CLAUDE_INITIALIZED = False
-# CLAUDE_CLIENT 초기화는 향후 추가
+
+if ANTHROPIC_API_KEY:
+    try:
+        import anthropic
+        CLAUDE_CLIENT = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        CLAUDE_INITIALIZED = True
+        print(f"[JNext] Claude initialized successfully")
+    except Exception as e:
+        print(f"[JNext] Claude initialization failed: {e}")
+else:
+    print(f"[JNext] Claude API Key not found in .env")
 
 # 모델 설정 (멀티 모델 지원)
 AI_MODELS = {
@@ -237,10 +248,10 @@ AI_MODELS = {
     },
     'claude': {
         'enabled': CLAUDE_INITIALIZED,
-        'model': 'claude-3-5-sonnet-20241022',  # 향후
-        'client': None,
-        'strengths': ['분석', '논리', '정확성'],
-        'display_name': 'Claude Sonnet',
+        'model': 'claude-3-5-sonnet-20241022',
+        'client': CLAUDE_CLIENT,
+        'strengths': ['코딩', '분석', '논리'],
+        'display_name': 'Claude Sonnet (코드왕)',
     }
 }
 

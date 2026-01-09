@@ -242,20 +242,55 @@ def _call_gpt(full_message, system_prompt):
 
 
 def _call_claude(full_message, system_prompt):
-    """Claude API 호출 (향후 구현)"""
+    """Claude API 호출"""
     if not settings.AI_MODELS['claude']['enabled']:
         raise Exception("Claude not initialized")
     
-    # TODO: Anthropic API 호출
-    return {
-        'answer': 'Claude 모델은 아직 구현되지 않았습니다.',
-        'claims': [],
-        'evidence': [],
-        'missing_info': ['Claude API 미구현'],
-        'confidence': 0.0,
-        'actions_suggested': [],
-        '_model': 'claude'
-    }
+    client = settings.AI_MODELS['claude']['client']
+    model = settings.AI_MODELS['claude']['model']
+    
+    try:
+        # Claude는 JSON mode 직접 지원 안 함, system prompt에 JSON 요청 추가
+        enhanced_prompt = f"{system_prompt}\n\n반드시 다음 JSON 형식으로만 응답하세요:\n{json.dumps(settings.AI_RESPONSE_SCHEMA, ensure_ascii=False, indent=2)}"
+        
+        response = client.messages.create(
+            model=model,
+            max_tokens=4096,
+            temperature=0.7,
+            system=enhanced_prompt,
+            messages=[
+                {"role": "user", "content": full_message}
+            ]
+        )
+        
+        # JSON 파싱
+        content = response.content[0].text
+        result = json.loads(content)
+        result['_model'] = 'claude'
+        result['_model_version'] = model
+        return result
+        
+    except json.JSONDecodeError as e:
+        # JSON 파싱 실패 시 fallback
+        return {
+            'answer': content if 'content' in locals() else 'Claude 응답 파싱 실패',
+            'claims': [],
+            'evidence': [],
+            'missing_info': ['JSON 응답 파싱 실패'],
+            'confidence': 0.5,
+            'actions_suggested': [],
+            '_model': 'claude',
+            '_error': str(e)
+        }
+    except Exception as e:
+        return {
+            'answer': f'Claude 호출 실패: {str(e)}',
+            'claims': [],
+            'evidence': [],
+            'confidence': 0.0,
+            '_model': 'claude',
+            '_error': str(e)
+        }
 
 
 def _call_all_models(full_message, system_prompt):
