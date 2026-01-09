@@ -145,7 +145,7 @@ def call_ai_model(model_name, user_message, system_prompt, db_context):
     AI 모델 호출 (멀티 모델 지원)
     
     Args:
-        model_name: 'gemini' | 'gpt' | 'claude' | 'all'
+        model_name: 'gemini-flash' | 'gemini-pro' | 'gpt' | 'claude' | 'all'
         user_message: J님의 메시지
         system_prompt: 시스템 프롬프트
         db_context: Firestore DB 데이터
@@ -155,8 +155,13 @@ def call_ai_model(model_name, user_message, system_prompt, db_context):
     """
     full_message = f"{db_context}\n\nJ님 질문: {user_message}"
     
-    if model_name == 'gemini' or model_name == settings.DEFAULT_AI_MODEL:
-        return _call_gemini(full_message, system_prompt)
+    # Gemini 계열 (Flash/Pro)
+    if model_name in ['gemini-flash', 'gemini-pro']:
+        return _call_gemini(full_message, system_prompt, model_key=model_name)
+    
+    # 기본값 fallback
+    elif model_name == 'gemini' or not model_name:
+        return _call_gemini(full_message, system_prompt, model_key=settings.DEFAULT_AI_MODEL)
     
     elif model_name == 'gpt':
         return _call_gpt(full_message, system_prompt)
@@ -172,13 +177,20 @@ def call_ai_model(model_name, user_message, system_prompt, db_context):
         raise ValueError(f"Unknown model: {model_name}")
 
 
-def _call_gemini(full_message, system_prompt):
-    """Gemini API 호출 (JSON 응답 강제)"""
-    if not settings.AI_MODELS['gemini']['enabled']:
-        raise Exception("Gemini not initialized")
+def _call_gemini(full_message, system_prompt, model_key='gemini-pro'):
+    """Gemini API 호출 (JSON 응답 강제)
     
-    client = settings.AI_MODELS['gemini']['client']
-    model = settings.AI_MODELS['gemini']['model']
+    Args:
+        model_key: 'gemini-flash' | 'gemini-pro'
+    """
+    if model_key not in settings.AI_MODELS:
+        model_key = 'gemini-pro'  # fallback
+    
+    if not settings.AI_MODELS[model_key]['enabled']:
+        raise Exception(f"{model_key} not initialized")
+    
+    client = settings.AI_MODELS[model_key]['client']
+    model = settings.AI_MODELS[model_key]['model']
     
     try:
         response = client.models.generate_content(
@@ -194,7 +206,7 @@ def _call_gemini(full_message, system_prompt):
         
         # JSON 파싱
         result = json.loads(response.text)
-        result['_model'] = 'gemini'
+        result['_model'] = model_key
         result['_model_version'] = model
         return result
         
@@ -207,7 +219,7 @@ def _call_gemini(full_message, system_prompt):
             'missing_info': ['JSON 응답 파싱 실패'],
             'confidence': 0.5,
             'actions_suggested': [],
-            '_model': 'gemini',
+            '_model': model_key,
             '_error': str(e)
         }
 

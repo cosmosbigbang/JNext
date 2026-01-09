@@ -214,28 +214,38 @@ CLAUDE_INITIALIZED = False
 
 # 모델 설정 (멀티 모델 지원)
 AI_MODELS = {
-    'gemini': {
+    'gemini-flash': {
         'enabled': GEMINI_INITIALIZED,
         'model': 'models/gemini-2.5-flash',
         'client': GEMINI_CLIENT,
         'strengths': ['속도', '코스트', '한글'],
+        'display_name': 'Gemini Flash (빠름)',
+    },
+    'gemini-pro': {
+        'enabled': GEMINI_INITIALIZED,
+        'model': 'models/gemini-2.0-flash-exp',  # Gemini Pro 실험 버전
+        'client': GEMINI_CLIENT,
+        'strengths': ['정확성', '추론', '분석'],
+        'display_name': 'Gemini Pro (정확)',
     },
     'gpt': {
         'enabled': GPT_INITIALIZED,
         'model': 'gpt-4o',  # 향후
         'client': None,
         'strengths': ['창의성', '추론', '코딩'],
+        'display_name': 'GPT-4o (진)',
     },
     'claude': {
         'enabled': CLAUDE_INITIALIZED,
         'model': 'claude-3-5-sonnet-20241022',  # 향후
         'client': None,
         'strengths': ['분석', '논리', '정확성'],
+        'display_name': 'Claude Sonnet',
     }
 }
 
-# 기본 모델 (현재는 Gemini)
-DEFAULT_AI_MODEL = 'gemini'
+# 기본 모델 (하이노밸런스는 Pro)
+DEFAULT_AI_MODEL = 'gemini-pro'
 
 # ============================================================
 # JNext 컬렉션 구조 (3단계)
