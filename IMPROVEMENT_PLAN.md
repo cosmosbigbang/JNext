@@ -5,6 +5,16 @@
 
 ---
 
+## ⚠️ 필수 주의사항 (진 검토 반영)
+
+1. **필드명은 반드시 한글 정본 사용**: `'제목'`, `'카테고리'`, `'내용'`, `'전체글'` (❌ title/category/content)
+2. **모드 용어 통일**: `organize`(DB), `hybrid`(통합), `analysis`(대화) - 다른 용어 혼용 금지
+3. **Priority 3-4는 현재 실행 금지**: 새 컬렉션/필드 추가 필요한 항목은 "아이디어 메모"만 유지
+4. **검증/재시도 로직은 중복 실행 방지 필수**: SAVE 2번 저장 같은 사고 주의
+5. **이 문서의 코드 예시는 '개념 설명용'**: 실제 적용 시 정본 필드명/구조 기준으로 재작성 필요
+
+---
+
 ## 🔴 Priority 1: 즉시 해결 (새벽 테스트 전)
 
 ### 1.1 웹 UI Static 파일 문제 완전 해결
@@ -69,24 +79,26 @@ function setLoading(loading) {
 ## 🟡 Priority 2: 안정성 개선 (1주일 내)
 
 ### 2.1 데이터 검증 강화
-**Firestore 저장 전 검증**:
+**Firestore 저장 전 검증** (⚠️ 실제 적용 시 한글 필드명 사용):
 ```python
 def validate_document(data):
-    required_fields = ['title', 'category', 'content']
+    # ⚠️ 정본 필드명: '제목', '카테고리', '내용', '전체글'
+    required_fields = ['제목', '카테고리', '내용']
     for field in required_fields:
         if not data.get(field):
             raise ValueError(f'{field} 필드는 필수입니다')
     
-    if len(data['title']) < 2:
+    if len(data['제목']) < 2:
         raise ValueError('제목은 2자 이상이어야 합니다')
     
-    if len(data['content']) < 10:
+    if len(data['내용']) < 10:
         raise ValueError('내용은 10자 이상이어야 합니다')
     
     return True
 ```
 
 ### 2.2 Gemini API 재시도 로직
+**⚠️ 중복 실행 방지(idempotent) 고려 필요** - SAVE 액션은 중복 저장 위험
 ```python
 import time
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -109,6 +121,7 @@ logger.error(f"[Chat API Error] {str(e)}", exc_info=True)
 ```
 
 ### 2.4 Rate Limiting (과도한 요청 방지)
+**⚠️ 적용 시 django-ratelimit 공식 문서 기준 확인**
 ```python
 # settings.py
 INSTALLED_APPS += ['django_ratelimit']
@@ -124,6 +137,8 @@ def chat(request):
 ---
 
 ## 🟢 Priority 3: 기능 개선 (2주 내)
+**⚠️ 현재 단계에서는 실행 금지 - 아이디어 메모로만 유지**
+**이유: 새 컬렉션/필드 추가 필요, 구조 변경 발생**
 
 ### 3.1 대화 히스토리 저장
 **현재**: 세션 종료 시 대화 사라짐  
@@ -186,6 +201,7 @@ def export_documents(request):
 ---
 
 ## 🔵 Priority 4: 최적화 (1달 내)
+**⚠️ 현재 단계에서는 실행 금지 - 테스트 완료 후 검토**
 
 ### 4.1 캐싱 추가
 ```python
