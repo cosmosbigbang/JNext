@@ -23,7 +23,7 @@ media/
 
 # Firebase 서비스 계정 키 (절대 커밋 금지!)
 *-service-account.json
-*.json
+jnext-service-account.json
 
 # IDE
 .vscode/

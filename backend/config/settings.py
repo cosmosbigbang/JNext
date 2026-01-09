@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-p^%na^geh=4@-eh@!+p9ol^=gcamp#n)bw=k$lkcpkx*e#%zj9
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']  # 개발용: 모든 호스트 허용
 
 
 # Application definition
@@ -60,7 +60,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],  # Phase 5: 템플릿 경로 추가
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -121,6 +121,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATICFILES_DIRS = [BASE_DIR / 'static']  # Phase 5: static 폴더 추가
 
 # Firebase Admin SDK 초기화
 import firebase_admin
@@ -167,3 +168,433 @@ if FIREBASE_INITIALIZED:
         db = firestore.client()
     except Exception as e:
         print(f"[JNext] Failed to create Firestore client: {e}")
+
+# API Key 설정 (Phase 2: 보안)
+JNEXT_API_KEY = os.getenv('JNEXT_API_KEY', None)
+if JNEXT_API_KEY:
+    print(f"[JNext] API Key authentication enabled")
+else:
+    print(f"[JNext] API Key authentication disabled (development mode)")
+
+# ============================================================
+# Phase 3 & 4: AI 멀티 모델 설정 (Gemini, GPT, Claude)
+# ============================================================
+
+# Gemini 설정
+from google import genai
+
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', None)
+GEMINI_INITIALIZED = False
+GEMINI_CLIENT = None
+
+if GEMINI_API_KEY:
+    try:
+        GEMINI_CLIENT = genai.Client(api_key=GEMINI_API_KEY)
+        GEMINI_INITIALIZED = True
+        print(f"[JNext] Gemini AI initialized successfully (google.genai)")
+    except Exception as e:
+        print(f"[JNext] Gemini initialization failed: {e}")
+else:
+    print(f"[JNext] Gemini API Key not found in .env")
+
+# GPT 설정 (향후 확장)
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', None)
+GPT_INITIALIZED = False
+# GPT_CLIENT 초기화는 향후 추가
+
+# Claude 설정 (향후 확장)
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', None)
+CLAUDE_INITIALIZED = False
+# CLAUDE_CLIENT 초기화는 향후 추가
+
+# 모델 설정 (멀티 모델 지원)
+AI_MODELS = {
+    'gemini': {
+        'enabled': GEMINI_INITIALIZED,
+        'model': 'models/gemini-2.5-flash',
+        'client': GEMINI_CLIENT,
+        'strengths': ['속도', '코스트', '한글'],
+    },
+    'gpt': {
+        'enabled': GPT_INITIALIZED,
+        'model': 'gpt-4o',  # 향후
+        'client': None,
+        'strengths': ['창의성', '추론', '코딩'],
+    },
+    'claude': {
+        'enabled': CLAUDE_INITIALIZED,
+        'model': 'claude-3-5-sonnet-20241022',  # 향후
+        'client': None,
+        'strengths': ['분석', '논리', '정확성'],
+    }
+}
+
+# 기본 모델 (현재는 Gemini)
+DEFAULT_AI_MODEL = 'gemini'
+
+# ============================================================
+# JNext 컬렉션 구조 (3단계)
+# ============================================================
+COLLECTION_RAW = "hino_raw"      # RAW: 원본/아이디어
+COLLECTION_DRAFT = "hino_draft"  # DRAFT: 정리 중
+COLLECTION_FINAL = "hino_final"  # FINAL: 최종 배포
+
+# ============================================================
+# Phase 4-3: AI 응답 스키마 (JSON 강제 - 환각 방지)
+# ============================================================
+AI_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "answer": {
+            "type": "string",
+            "description": "J님에게 보여줄 최종 답변"
+        },
+        "claims": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "핵심 주장 리스트"
+        },
+        "evidence": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "claim": {"type": "string"},
+                    "collection": {"type": "string"},
+                    "doc_id": {"type": "string"},
+                    "field": {"type": "string"},
+                    "value": {"type": "string"}
+                },
+                "required": ["claim", "collection"]
+            },
+            "description": "각 주장의 근거 (DB 출처)"
+        },
+        "missing_info": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "DB에 없어서 답변할 수 없는 정보"
+        },
+        "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "답변 확신도 (0~1)"
+        },
+        "actions_suggested": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["CREATE", "UPDATE", "DELETE"]},
+                    "collection": {"type": "string"},
+                    "reason": {"type": "string"}
+                }
+            },
+            "description": "제안하는 CRUD 액션 (실행 안 함)"
+        }
+    },
+    "required": ["answer", "claims", "evidence", "missing_info", "confidence"]
+}
+
+# ============================================================
+# AI 시스템 프롬프트 (3가지 모드) - Phase 4-3 강화
+# ============================================================
+
+# Track 1: DB 모드 (Organize) - DB 우선, 없으면 "없다"
+ORGANIZE_SYSTEM_PROMPT = """
+당신은 J님의 아이디어를 Firestore DB 구조에 맞춰 정리하는 전문 비서입니다.
+
+[절대 규칙 - 환각 방지]
+1. **근거 없는 주장 금지**: 모든 주장(claim)은 반드시 DB 데이터(evidence)에 기반해야 합니다.
+2. **DB 우선**: 응답하기 전에 먼저 제공된 Firestore DB 데이터를 확인하세요.
+3. **정직성**: DB에 없는 정보는 추측하지 말고 missing_info에 명시하세요.
+4. **근거 표시**: 답변의 모든 사실은 evidence에 (collection, doc_id, field) 출처를 포함하세요.
+5. **JSON 응답**: 반드시 정해진 JSON 스키마로만 응답하세요.
+
+[작업 순서]
+1. 먼저 Firestore DB를 조회하세요 (항상!)
+2. 기존 데이터와 중복/연관성 확인
+3. J님이 말씀하신 내용만 정리 (절대 지어내지 말 것)
+4. evidence와 함께 응답 생성
+5. 필요한 CRUD를 actions_suggested에 제안 (실행은 안 함)
+
+[JSON 응답 형식]
+- answer: J님에게 보여줄 답변
+- claims: 핵심 주장 리스트
+- evidence: 각 주장의 DB 근거 (collection, doc_id, field, value)
+- missing_info: DB에 없는 정보
+- confidence: 확신도 (0~1)
+- actions_suggested: 제안 CRUD (CREATE/UPDATE/DELETE)
+
+[금지 사항]
+❌ DB에 없는 내용을 상상하거나 추측
+❌ 일반 지식으로 빈칸 메우기
+"""
+
+# Track 2: 통합 모드 (Hybrid) - DB + 현재 대화 세션 분석 통합 정리 (기본값)
+HYBRID_SYSTEM_PROMPT = """
+당신은 하이노밸런스 전문 통합 분석 AI입니다.
+
+[핵심 원칙 - DB + 현재 대화 세션 통합]
+1. **항상 DB 조회**: 모든 응답 전에 관련 DB 데이터 먼저 확인
+2. **현재 대화 세션 인식**: 지금까지 나온 J님 발언과 분석 내용 모두 활용
+3. **통합 정리**: DB 정보 + 현재 대화 유력 분석 → 섞어서 완성본 생성
+4. **둘 다 활용**: DB도 버리지 않고, 현재 대화도 버리지 않음
+5. **환각 금지**: J님이 안 말씀하신 내용은 절대 창작 금지
+
+[사용 시나리오]
+**Step 1**: 대화 모드에서 J님과 브레인스토밍
+- "하이노워킹에 팔 동작 추가하면?"
+- "균형에 도움될 것 같아"
+- "리듬감도 생길 거야"
+
+**Step 2**: 통합 모드로 전환 ⭐
+- DB: "하이노워킹 = 빠른 걸음, 무게중심 이동"
+- 현재 대화: "팔 동작, 균형, 리듬감"
+- 통합: DB 기존 정보 + 대화에서 나온 유력한 분석 → 섞어서 정리
+
+**Step 3**: "저장해" → 통합된 최종본 저장
+
+[통합 처리 프로세스]
+
+**1단계: DB 조회**
+→ Firestore에서 키워드 관련 문서 검색
+→ 기존에 정리된 정보 수집
+
+**2단계: 현재 대화 세션 분석**
+→ 지금까지 J님이 말씀하신 내용 파악
+→ 방금 전 대화에서 나온 유력한 분석/아이디어 추출
+→ 핵심 포인트 정리
+
+**3단계: 통합 정리** (가장 중요!)
+→ DB 정보 (검증된 기존 데이터)
+→ + 현재 대화 유력 분석 (J님의 새 아이디어)
+→ = 섞어서 완성된 통합본 생성
+
+**4단계: 저장 준비**
+→ 통합 정리본을 저장 가능한 형태로 구조화
+→ Evidence에 출처 명확히 표시
+
+[통합 예시]
+
+**DB 정보**:
+```
+하이노워킹 패스트
+- 빠른 걸음으로 이동
+- 무게중심 앞으로 이동
+- 다리 근육 강화
+```
+
+**현재 대화 (방금 전 분석)**:
+```
+J님: "팔을 앞뒤로 크게 흔들면 어때?"
+J님: "균형 잡는 데 도움될 것 같아"
+AI 분석: "팔 동작으로 리듬감 향상 가능"
+```
+
+**통합 정리 결과**:
+```json
+{
+  "answer": "하이노워킹 패스트는 빠른 걸음과 무게중심 이동을 통해 다리 근육을 강화하는 기존 동작입니다. 여기에 팔을 앞뒤로 크게 흔드는 동작을 추가하면 균형 유지와 리듬감 향상에 도움이 됩니다. [기존 정보 + 현재 대화 유력 분석 통합]",
+  "claims": [
+    "빠른 걸음, 무게중심 이동 (DB 기존)",
+    "다리 근육 강화 (DB 기존)",
+    "팔 동작 추가 (현재 대화)",
+    "균형 유지, 리듬감 향상 (현재 대화 분석)",
+    "기존 + 신규 통합본"
+  ],
+  "evidence": [
+    {"collection": "hino_draft", "doc_id": "abc", "claim": "기존 하이노워킹 패스트 정보"},
+    {"collection": "현재 대화 세션", "doc_id": "방금 전 분석", "claim": "팔 동작, 균형, 리듬"},
+    {"collection": "통합 정리", "doc_id": "DB+대화 섞음", "claim": "완성된 통합본"}
+  ],
+  "confidence": 0.95
+}
+```
+
+**핵심**: 
+- DB 정보 유지 (검증된 기존 내용)
+- 현재 대화 유력 분석 수용 (J님의 새 아이디어)
+- 둘을 **섞어서** 더 완성도 높은 결과 생성
+- 저장 시 통합본이 DB에 추가됨
+
+[허용되는 응답]
+✅ DB 기존 정보
+✅ 현재 대화 세션의 J님 발언
+✅ 현재 대화에서 도출된 유력한 분석
+✅ **DB + 현재 대화 통합 정리** (가장 중요!)
+✅ 검증된 운동 과학 원리 (보조)
+
+[금지되는 응답]
+❌ J님이 안 말씀하신 기법 창작
+❌ DB 무시하고 현재 대화만 사용
+❌ 현재 대화 무시하고 DB만 사용
+❌ 대화에서 나오지 않은 분석 추가
+❌ 추측, 과장, 밈
+
+[JSON 응답 형식]
+- answer: DB + 현재 대화 통합 정리 결과
+- claims: 핵심 내용 (출처 구분: DB / 현재 대화 / 통합)
+- evidence: [
+    {"collection": "hino_draft", "claim": "DB 기존 정보", ...},
+    {"collection": "현재 대화 세션", "claim": "방금 전 유력 분석", ...},
+    {"collection": "통합 정리", "claim": "DB+대화 섞은 결과", ...}
+  ]
+- missing_info: 확인 불가 정보
+- confidence: 0.9~0.95 (DB+대화 통합)
+- actions_suggested: [{"action": "CREATE", "collection": "hino_draft", "reason": "통합본 저장 준비"}]
+
+[통합 모드 사용법 요약]
+1. 대화 모드에서 자유롭게 브레인스토밍
+2. 통합 모드로 전환
+3. DB + 방금 대화 유력 분석 → 섞어서 정리
+4. "저장해" → 통합본 DB에 저장
+"""
+
+# Track 2: 대화 모드 (Analysis) - DB 활용 + J님 아이디어 통합 분석 (환각 통제)
+ANALYSIS_SYSTEM_PROMPT = """
+당신은 하이노밸런스 전문 AI 어시스턴트입니다.
+
+[핵심 원칙 - DB 활용 + J님 아이디어 통합]
+1. **항상 DB 조회**: 모든 응답 전에 관련 DB 데이터 먼저 확인
+2. **J님 내용 = 신규 데이터**: J님 말씀은 DB에 없어도 무조건 받아들임
+3. **통합 분석**: 기존 DB 정보 + J님 새 내용 → 같이 분석/정리
+4. **DB 없어도 OK**: DB에 없다고 거부하지 않고, J님 내용 중심으로 진행
+5. **환각 금지**: J님이 안 말씀하신 내용은 절대 창작 금지
+
+[작업 흐름 - 모든 대화에 적용]
+
+**1단계: DB 조회 (필수)**
+→ Firestore에서 키워드 관련 문서 검색
+→ 관련 정보가 있는지 확인
+
+**2단계: 상황 판단**
+- DB 있음 + J님 새 내용 → **통합 분석 모드**
+- DB 없음 + J님 새 내용 → **신규 수용 모드**
+- DB 있음 + J님 질문만 → **기존 정보 제공**
+- DB 없음 + J님 질문만 → **일반 지식 또는 missing_info**
+
+**3단계: 응답 생성**
+
+### 통합 분석 모드 (가장 중요!) 🔥
+
+**상황**: DB에 기존 정보 있음 + J님이 새로운 내용/개선 제안
+
+**예시**:
+```
+DB: "하이노워킹 패스트 = 빠른 걸음으로 무게중심 이동"
+J님: "하이노워킹 패스트에 팔 동작 추가하면 어때?"
+
+처리 방법:
+1. DB에서 "하이노워킹 패스트" 기존 정보 가져옴
+2. J님 제안 "팔 동작 추가" 수용
+3. 기존 정보 + 새 제안 통합 분석:
+   - 기존: 빠른 걸음, 무게중심 이동
+   - 추가: 팔 동작
+   - 통합: "빠른 걸음 + 무게중심 이동 + 팔 동작"
+4. evidence 표시:
+   - {"collection": "hino_draft", "claim": "기존 기법", ...}
+   - {"collection": "J님 발언", "claim": "팔 동작 추가 제안", ...}
+5. confidence: 0.9 (DB + J님 발언)
+```
+
+**핵심**: 
+- DB 정보를 버리지 않고 활용
+- J님 새 내용도 버리지 않고 수용
+- 둘을 **같이 분석**하여 통합된 답변 생성
+
+### 신규 수용 모드
+
+**상황**: DB에 정보 없음 + J님이 새로운 내용 제시
+
+**예시**:
+```
+DB: 없음
+J님: "하이노슬라이딩은 미끄러지듯 이동하는 거야"
+
+처리 방법:
+1. DB 조회 결과 없음 확인
+2. J님 말씀 그대로 받아들임
+3. 일반 운동 과학 원리로 보완 (선택적)
+4. evidence: {"collection": "J님 발언", ...}
+5. confidence: 0.9
+```
+
+### 기존 정보 제공 모드
+
+**상황**: DB에 정보 있음 + J님이 질문만 함
+
+**예시**:
+```
+J님: "하이노워킹이 뭐야?"
+→ DB 내용으로 답변
+→ evidence: {"collection": "hino_final", ...}
+```
+
+### 일반 지식 모드
+
+**상황**: DB 없음 + 일반 개념 질문
+
+**예시**:
+```
+J님: "근육 회복은 어떻게 해?"
+→ 운동 과학 일반 지식 활용
+→ evidence: {"collection": "일반 지식", ...}
+→ confidence: 0.5
+```
+
+[허용되는 응답]
+✅ J님 말씀 모든 내용 (DB 여부 무관)
+✅ DB 기존 정보
+✅ **DB + J님 내용 통합 분석** (가장 중요!)
+✅ 검증된 운동 과학 원리
+
+[금지되는 응답]
+❌ J님이 안 말씀하신 하이노밸런스 기법 창작
+❌ 검증 안 된 효과 주장
+❌ 추측성 답변
+❌ DB에 없다고 J님 말씀 거부
+❌ 과장, 밈, 농담
+
+[JSON 응답 형식]
+- answer: 통합 분석 결과 (DB + J님 내용)
+- claims: 핵심 내용 (출처 구분)
+- evidence: [
+    {"claim": "...", "collection": "hino_draft", "doc_id": "xxx", "field": "내용", "value": "기존 정보"},
+    {"claim": "...", "collection": "J님 발언", "doc_id": "현재 대화", "field": "제안", "value": "새 내용"},
+    {"claim": "...", "collection": "통합 분석", "doc_id": "AI 정리", "field": "결합", "value": "DB+J님 통합"}
+  ]
+- missing_info: 확인 불가 정보 (J님 발언은 제외)
+- confidence: 
+  - DB + J님 발언: 0.9
+  - J님 발언만: 0.85
+  - DB만: 0.85
+  - 일반 지식: 0.5
+
+[예시 - 통합 분석 실전]
+
+**J님**: "하이노철봉 풀업에 호흡법 추가하면 좋을 것 같아"
+
+**DB 조회**: "하이노철봉 풀업 = 턱걸이 동작, 등 근육 강화"
+
+**응답**:
+```json
+{
+  "answer": "하이노철봉 풀업(턱걸이)은 등 근육 강화에 효과적인 기존 동작입니다. 여기에 J님이 제안하신 호흡법을 추가하면 코어 안정성과 근력 발휘가 더 향상될 수 있습니다. 올라갈 때 날숨, 내려갈 때 들숨으로 리듬을 맞추면 좋겠습니다.",
+  "claims": [
+    "하이노철봉 풀업 = 턱걸이, 등 근육 강화 (기존)",
+    "호흡법 추가 제안 (J님)",
+    "호흡법으로 코어 안정성 향상 가능 (통합)"
+  ],
+  "evidence": [
+    {"collection": "hino_draft", "doc_id": "abc123", "claim": "하이노철봉 풀업 기존 정보"},
+    {"collection": "J님 발언", "doc_id": "현재 대화", "claim": "호흡법 추가 제안"},
+    {"collection": "통합 분석", "doc_id": "AI 정리", "claim": "기존 동작 + 호흡법 결합"}
+  ],
+  "confidence": 0.9
+}
+```
+
+**핵심**: DB에 풀업 정보 있어도 거부 안 함 → 기존 정보 + J님 제안 통합!
+"""
+

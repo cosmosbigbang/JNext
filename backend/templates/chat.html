@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JNext - AI Chat Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .mode-btn {
+            padding: 8px 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .mode-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .mode-btn.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .mode-toggle, .model-select {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .mode-toggle:hover, .model-select:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .model-select {
+            font-size: 14px;
+        }
+
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 15px 20px;
+            border-radius: 18px;
+            line-height: 1.5;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.ai .message-content {
+            background: white;
+            color: #333;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .evidence-panel {
+            margin-top: 10px;
+            padding: 12px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        .evidence-item {
+            margin: 5px 0;
+            padding: 5px;
+            background: white;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .debug-info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e8f4f8;
+            border-left: 3px solid #667eea;
+            font-size: 11px;
+            color: #555;
+        }
+
+        .input-area {
+            padding: 20px 30px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 15px;
+        }
+
+        #message-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 15px;
+            outline: none;
+            transition: border 0.3s;
+        }
+
+        #message-input:focus {
+            border-color: #667eea;
+        }
+
+        #send-button {
+            padding: 15px 35px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        #send-button:hover {
+            transform: translateY(-2px);
+        }
+
+        #send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .claims-list {
+            margin-top: 10px;
+            padding-left: 20px;
+        }
+
+        .claim-item {
+            margin: 5px 0;
+            list-style-type: disc;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-right: 5px;
+        }
+
+        .badge-organize { background: #4CAF50; color: white; }
+        .badge-analysis { background: #2196F3; color: white; }
+        .badge-gemini { background: #FF6B6B; color: white; }
+        .badge-gpt { background: #00D9C0; color: white; }
+        .badge-claude { background: #FF8C42; color: white; }
+
+        /* 모달 스타일 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 80%;
+            max-width: 700px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover { color: #000; }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 200px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+        }
+
+        .save-btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .save-btn:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 JNext - AI Chat (J님 전용)</h1>
+            <div class="mode-selector">
+                <button id="mode-data" class="mode-btn active" onclick="setMode('data')">
+                    📊 데이터 모드
+                </button>
+                <button id="mode-chat" class="mode-btn" onclick="setMode('chat')">
+                    🤖 대화 모드
+                </button>
+            </div>
+            <div class="controls">
+                <select id="mode-toggle" class="mode-toggle">
+                    <option value="organize">📝 정리 모드</option>
+                    <option value="analysis">🔍 분석 모드</option>
+                </select>
+                <select id="model-select" class="model-select">
+                    <option value="gemini">Gemini 2.5</option>
+                    <option value="gpt">GPT-4o (준비중)</option>
+                    <option value="claude">Claude 3.5 (준비중)</option>
+                    <option value="all">🔥 3두 체계</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="chat-area" id="chat-area">
+            <div class="message ai">
+                <div class="message-content">
+                    <strong>JNext 시스템</strong><br>
+                    안녕하세요 J님! 😊<br><br>
+                    현재 활성화된 기능:<br>
+                    ✅ Firestore DB 연동 (RAW/DRAFT/FINAL)<br>
+                    ✅ Gemini 2.5 Flash (JSON 응답 강제)<br>
+                    ✅ 환각 방지 (근거 기반 응답)<br>
+                    ✅ 멀티 모델 지원 준비<br><br>
+                    무엇을 도와드릴까요?
+                </div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <input 
+                type="text" 
+                id="message-input" 
+                placeholder="J님의 메시지를 입력하세요..."
+                autocomplete="off"
+            />
+            <button id="send-button">전송</button>
+        </div>
+    </div>
+
+    <!-- 답변 저장 모달 -->
+    <div id="save-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>📝 정리 내용 저장</h2>
+            <div class="form-group">
+                <label>제목:</label>
+                <input type="text" id="save-title" placeholder="예: 하이노밸런스 핵심 정리">
+            </div>
+            <div class="form-group">
+                <label>카테고리:</label>
+                <select id="save-category">
+                    <option value="하이노이론">하이노이론</option>
+                    <option value="하이노워킹">하이노워킹</option>
+                    <option value="하이노스케이팅">하이노스케이팅</option>
+                    <option value="하이노철봉">하이노철봉</option>
+                    <option value="하이노기본">하이노기본</option>
+                    <option value="기타">기타</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>내용 (자유롭게 편집 가능):</label>
+                <textarea id="save-content" rows="15"></textarea>
+            </div>
+            <div class="form-group">
+                <label>저장 위치:</label>
+                <select id="save-collection">
+                    <option value="hino_draft">📝 Draft (초안)</option>
+                    <option value="hino_final">✅ Final (최종)</option>
+                </select>
+            </div>
+            <button id="confirm-save-btn" class="btn-primary">💾 저장</button>
+        </div>
+    </div>
+
+    <script src="/static/chat.js"></script>
+</body>
+</html>

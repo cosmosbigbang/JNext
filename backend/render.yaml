@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: jnext-backend
+    env: python
+    region: singapore
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn config.wsgi:application
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: FIREBASE_CREDENTIALS_PATH
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings

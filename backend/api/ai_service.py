@@ -1,0 +1,278 @@
+"""
+AI 서비스 추상화 레이어
+멀티 모델 지원 (Gemini, GPT, Claude)
+Phase 6: 의도 분류 (Intent Classification)
+"""
+from django.conf import settings
+import json
+
+
+def classify_intent(user_message):
+    """
+    사용자 메시지에서 의도(Intent) 감지
+    Phase 6: 자동 CRUD
+    
+    Returns:
+        dict: {
+            'intent': 'SAVE' | 'READ' | 'UPDATE' | 'DELETE' | 'NONE',
+            'confidence': 0.0~1.0,
+            'params': {...}
+        }
+    """
+    message_lower = user_message.lower()
+    
+    # SAVE 의도
+    save_keywords = ['저장', 'save', '저장해', '저장해줘', '기록', '보관']
+    if any(keyword in message_lower for keyword in save_keywords):
+        params = {
+            'collection': 'hino_final' if any(k in message_lower for k in ['최종', 'final', '완료']) else 'hino_draft',
+            'target': 'last_response'
+        }
+        return {
+            'intent': 'SAVE',
+            'confidence': 0.9,
+            'params': params
+        }
+    
+    # READ 의도 (데이터 조회 - 명확한 키워드만)
+    read_keywords = ['검색', '가져와', '보여줘', '조회', 'read', 'show', '찾아줘', '목록']
+    # '알려줘', '설명' 등은 제외 (AI 대화용)
+    exclude_keywords = ['알려', '설명', '분석', '어때', '뭐야', '무엇']
+    
+    if any(keyword in message_lower for keyword in read_keywords) and \
+       not any(keyword in message_lower for keyword in exclude_keywords):
+        params = {'collections': []}
+        
+        # 컬렉션 필터링
+        if 'draft' in message_lower or '초안' in message_lower:
+            params['collections'].append('hino_draft')
+        if 'final' in message_lower or '최종' in message_lower:
+            params['collections'].append('hino_final')
+        if 'raw' in message_lower or '원본' in message_lower:
+            params['collections'].append('hino_raw')
+        
+        # 카테고리 필터링
+        categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본']
+        for category in categories:
+            if category in user_message:
+                params['category'] = category
+                break
+        
+        return {
+            'intent': 'READ',
+            'confidence': 0.85,
+            'params': params
+        }
+    
+    # DELETE 의도
+    delete_keywords = ['삭제', 'delete', '지워', '삭제해', '제거']
+    if any(keyword in message_lower for keyword in delete_keywords):
+        return {
+            'intent': 'DELETE',
+            'confidence': 0.9,
+            'params': {'requires_approval': True}
+        }
+    
+    # UPDATE 의도
+    update_keywords = ['수정', 'update', '고쳐', '바꿔', '변경']
+    if any(keyword in message_lower for keyword in update_keywords):
+        return {
+            'intent': 'UPDATE',
+            'confidence': 0.85,
+            'params': {'requires_approval': True}
+        }
+    
+    # GENERATE_FINAL 의도 (최종본 생성/정리)
+    generate_keywords = ['최종본', '정리해', '종합해', '통합해', '만들어']
+    if any(keyword in message_lower for keyword in generate_keywords):
+        params = {
+            'mode': 'final' if '최종' in message_lower else 'draft',
+            'category': None,
+            'exercise_name': None,
+            'include_keywords': [],
+            'exclude_keywords': []
+        }
+        
+        # 카테고리 감지
+        categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스']
+        for category in categories:
+            if category in user_message:
+                params['category'] = category
+                break
+        
+        # 운동명 감지 (카테고리 하위)
+        exercise_patterns = ['기본', '패스트', '슬로우', 'X', '주먹', '폭당폭당', '크로스']
+        for pattern in exercise_patterns:
+            if pattern in user_message and params['category']:
+                params['exercise_name'] = params['category'] + pattern
+        
+        # 포함/제외 키워드 추출
+        if '포함' in user_message or '넣어' in user_message:
+            # "기본, 패스트 포함" 형태 감지
+            import re
+            include_match = re.search(r'([\w\s,]+)\s*(포함|넣)', user_message)
+            if include_match:
+                keywords = include_match.group(1).replace(',', ' ').split()
+                params['include_keywords'] = keywords
+        
+        if '빼' in user_message or '제외' in user_message:
+            import re
+            exclude_match = re.search(r'([\w\s,]+)\s*(빼|제외)', user_message)
+            if exclude_match:
+                keywords = exclude_match.group(1).replace(',', ' ').split()
+                params['exclude_keywords'] = keywords
+        
+        # '전체' 키워드
+        if '전체' in message_lower:
+            params['all'] = True
+        
+        return {
+            'intent': 'GENERATE_FINAL',
+            'confidence': 0.9,
+            'params': params
+        }
+    
+    # NONE (일반 질문)
+    return {
+        'intent': 'NONE',
+        'confidence': 1.0,
+        'params': {}
+    }
+
+
+def call_ai_model(model_name, user_message, system_prompt, db_context):
+    """
+    AI 모델 호출 (멀티 모델 지원)
+    
+    Args:
+        model_name: 'gemini' | 'gpt' | 'claude' | 'all'
+        user_message: J님의 메시지
+        system_prompt: 시스템 프롬프트
+        db_context: Firestore DB 데이터
+    
+    Returns:
+        dict: JSON 응답 (AI_RESPONSE_SCHEMA 형식)
+    """
+    full_message = f"{db_context}\n\nJ님 질문: {user_message}"
+    
+    if model_name == 'gemini' or model_name == settings.DEFAULT_AI_MODEL:
+        return _call_gemini(full_message, system_prompt)
+    
+    elif model_name == 'gpt':
+        return _call_gpt(full_message, system_prompt)
+    
+    elif model_name == 'claude':
+        return _call_claude(full_message, system_prompt)
+    
+    elif model_name == 'all':
+        # 3두 체계: 모든 모델 호출 후 비교
+        return _call_all_models(full_message, system_prompt)
+    
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
+
+
+def _call_gemini(full_message, system_prompt):
+    """Gemini API 호출 (JSON 응답 강제)"""
+    if not settings.AI_MODELS['gemini']['enabled']:
+        raise Exception("Gemini not initialized")
+    
+    client = settings.AI_MODELS['gemini']['client']
+    model = settings.AI_MODELS['gemini']['model']
+    
+    try:
+        response = client.models.generate_content(
+            model=model,
+            contents=full_message,
+            config={
+                'system_instruction': system_prompt,
+                'temperature': 0.7,
+                'response_mime_type': 'application/json',  # JSON 강제
+                'response_schema': settings.AI_RESPONSE_SCHEMA,  # 스키마 강제
+            }
+        )
+        
+        # JSON 파싱
+        result = json.loads(response.text)
+        result['_model'] = 'gemini'
+        result['_model_version'] = model
+        return result
+        
+    except json.JSONDecodeError as e:
+        # JSON 파싱 실패 시 fallback
+        return {
+            'answer': response.text,
+            'claims': [],
+            'evidence': [],
+            'missing_info': ['JSON 응답 파싱 실패'],
+            'confidence': 0.5,
+            'actions_suggested': [],
+            '_model': 'gemini',
+            '_error': str(e)
+        }
+
+
+def _call_gpt(full_message, system_prompt):
+    """GPT API 호출 (향후 구현)"""
+    if not settings.AI_MODELS['gpt']['enabled']:
+        raise Exception("GPT not initialized")
+    
+    # TODO: OpenAI API 호출
+    return {
+        'answer': 'GPT 모델은 아직 구현되지 않았습니다.',
+        'claims': [],
+        'evidence': [],
+        'missing_info': ['GPT API 미구현'],
+        'confidence': 0.0,
+        'actions_suggested': [],
+        '_model': 'gpt'
+    }
+
+
+def _call_claude(full_message, system_prompt):
+    """Claude API 호출 (향후 구현)"""
+    if not settings.AI_MODELS['claude']['enabled']:
+        raise Exception("Claude not initialized")
+    
+    # TODO: Anthropic API 호출
+    return {
+        'answer': 'Claude 모델은 아직 구현되지 않았습니다.',
+        'claims': [],
+        'evidence': [],
+        'missing_info': ['Claude API 미구현'],
+        'confidence': 0.0,
+        'actions_suggested': [],
+        '_model': 'claude'
+    }
+
+
+def _call_all_models(full_message, system_prompt):
+    """
+    3두/2두 체계: 모든 활성화된 모델 호출 후 비교
+    """
+    results = {}
+    
+    for model_name, config in settings.AI_MODELS.items():
+        if config['enabled']:
+            try:
+                if model_name == 'gemini':
+                    results[model_name] = _call_gemini(full_message, system_prompt)
+                elif model_name == 'gpt':
+                    results[model_name] = _call_gpt(full_message, system_prompt)
+                elif model_name == 'claude':
+                    results[model_name] = _call_claude(full_message, system_prompt)
+            except Exception as e:
+                results[model_name] = {'error': str(e)}
+    
+    # 향후: 투표/합의 알고리즘 추가
+    # 현재는 모든 결과 반환
+    return {
+        'answer': '멀티 모델 응답 (아래 참조)',
+        'claims': [],
+        'evidence': [],
+        'missing_info': [],
+        'confidence': 0.0,
+        'actions_suggested': [],
+        '_model': 'all',
+        '_responses': results
+    }
