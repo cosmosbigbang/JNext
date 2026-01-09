@@ -94,7 +94,7 @@ async function sendMessage() {
 function displayAIResponse(data) {
     const response = data.response;
     const mode = data.mode || 'organize';
-    const model = data.model || 'gemini';
+    const model = data.model || 'gemini-pro';
     const dbCount = data.db_documents_count || 0;
     const userMessage = data.message || data.user_message || '';
     const action = data.action || null;  // SAVE/READ 등
