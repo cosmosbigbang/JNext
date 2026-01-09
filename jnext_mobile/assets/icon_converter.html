@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JNext Icon Generator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #673AB7;
+            margin-bottom: 20px;
+        }
+        #canvas {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            display: block;
+            margin: 20px auto;
+        }
+        button {
+            background: linear-gradient(135deg, #673AB7, #3F51B5);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: block;
+            margin: 20px auto;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .instructions {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 JNext 앱 아이콘 생성기</h1>
+        
+        <canvas id="canvas" width="1024" height="1024"></canvas>
+        
+        <button onclick="downloadIcon()">📥 icon.png 다운로드 (1024x1024)</button>
+        
+        <div class="instructions">
+            <strong>사용 방법:</strong><br>
+            1. 위 버튼을 클릭하여 icon.png 다운로드<br>
+            2. C:\Projects\JNext\jnext_mobile\assets\ 폴더에 저장<br>
+            3. PowerShell에서 실행:<br>
+            &nbsp;&nbsp;&nbsp;<code>cd C:\Projects\JNext\jnext_mobile</code><br>
+            &nbsp;&nbsp;&nbsp;<code>flutter pub get</code><br>
+            &nbsp;&nbsp;&nbsp;<code>flutter pub run flutter_launcher_icons</code>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Gradient background
+        const gradient = ctx.createLinearGradient(0, 0, 1024, 1024);
+        gradient.addColorStop(0, '#673AB7');  // Deep Purple
+        gradient.addColorStop(1, '#3F51B5');  // Indigo
+        
+        // Draw rounded rectangle
+        const radius = 180;
+        ctx.beginPath();
+        ctx.moveTo(radius, 0);
+        ctx.lineTo(1024 - radius, 0);
+        ctx.quadraticCurveTo(1024, 0, 1024, radius);
+        ctx.lineTo(1024, 1024 - radius);
+        ctx.quadraticCurveTo(1024, 1024, 1024 - radius, 1024);
+        ctx.lineTo(radius, 1024);
+        ctx.quadraticCurveTo(0, 1024, 0, 1024 - radius);
+        ctx.lineTo(0, radius);
+        ctx.quadraticCurveTo(0, 0, radius, 0);
+        ctx.closePath();
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        
+        // Draw subtle document icon in background
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillRect(650, 350, 100, 350);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(680, 400);
+        ctx.lineTo(720, 400);
+        ctx.moveTo(680, 450);
+        ctx.lineTo(720, 450);
+        ctx.moveTo(680, 500);
+        ctx.lineTo(720, 500);
+        ctx.stroke();
+        
+        // Draw "J" letter with gradient
+        const textGradient = ctx.createLinearGradient(0, 0, 1024, 1024);
+        textGradient.addColorStop(0, '#FFFFFF');
+        textGradient.addColorStop(1, '#E1BEE7');
+        
+        // Shadow
+        ctx.font = 'bold 520px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+        ctx.fillText('J', 512, 520);
+        
+        // Main text
+        ctx.fillStyle = textGradient;
+        ctx.fillText('J', 512, 512);
+        
+        function downloadIcon() {
+            const link = document.createElement('a');
+            link.download = 'icon.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>
