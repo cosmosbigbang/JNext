@@ -2,9 +2,60 @@
 AI 서비스 추상화 레이어
 멀티 모델 지원 (Gemini, GPT, Claude)
 Phase 6: 의도 분류 (Intent Classification)
+Phase 7: JSON 스키마 검증
 """
 from django.conf import settings
 import json
+
+
+def validate_ai_response(response):
+    """
+    AI 응답 JSON 스키마 검증 및 보정
+    
+    Args:
+        response: AI 모델의 응답 dict
+    
+    Returns:
+        dict: 검증 및 보정된 응답
+    """
+    # 필수 필드 기본값
+    defaults = {
+        'answer': '',
+        'claims': [],
+        'evidence': [],
+        'missing_info': [],
+        'confidence': 0.5,
+        'actions_suggested': []
+    }
+    
+    # 누락된 필드 보정
+    for field, default_value in defaults.items():
+        if field not in response:
+            response[field] = default_value
+    
+    # 타입 검증 및 보정
+    if not isinstance(response['answer'], str):
+        response['answer'] = str(response['answer'])
+    
+    if not isinstance(response['claims'], list):
+        response['claims'] = []
+    
+    if not isinstance(response['evidence'], list):
+        response['evidence'] = []
+    
+    if not isinstance(response['missing_info'], list):
+        response['missing_info'] = []
+    
+    if not isinstance(response['confidence'], (int, float)):
+        response['confidence'] = 0.5
+    else:
+        # confidence 범위 제한 (0~1)
+        response['confidence'] = max(0.0, min(1.0, float(response['confidence'])))
+    
+    if not isinstance(response['actions_suggested'], list):
+        response['actions_suggested'] = []
+    
+    return response
 
 
 def classify_intent(user_message):
@@ -208,7 +259,9 @@ def _call_gemini(full_message, system_prompt, model_key='gemini-pro'):
         result = json.loads(response.text)
         result['_model'] = model_key
         result['_model_version'] = model
-        return result
+        
+        # 스키마 검증
+        return validate_ai_response(result)
         
     except json.JSONDecodeError as e:
         # JSON 파싱 실패 시 fallback
@@ -225,20 +278,55 @@ def _call_gemini(full_message, system_prompt, model_key='gemini-pro'):
 
 
 def _call_gpt(full_message, system_prompt):
-    """GPT API 호출 (향후 구현)"""
+    """GPT-4o API 호출 (OpenAI)"""
     if not settings.AI_MODELS['gpt']['enabled']:
         raise Exception("GPT not initialized")
     
-    # TODO: OpenAI API 호출
-    return {
-        'answer': 'GPT 모델은 아직 구현되지 않았습니다.',
-        'claims': [],
-        'evidence': [],
-        'missing_info': ['GPT API 미구현'],
-        'confidence': 0.0,
-        'actions_suggested': [],
-        '_model': 'gpt'
-    }
+    client = settings.GPT_CLIENT
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": f"{system_prompt}\n\n반드시 다음 JSON 형식으로만 응답하세요:\n{json.dumps(settings.AI_RESPONSE_SCHEMA, ensure_ascii=False, indent=2)}"},
+                {"role": "user", "content": full_message}
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+        
+        # JSON 파싱
+        content = response.choices[0].message.content
+        result = json.loads(content)
+        result['_model'] = 'gpt'
+        result['_model_version'] = 'gpt-4o'
+        
+        # 스키마 검증
+        return validate_ai_response(result)
+        
+    except json.JSONDecodeError as e:
+        # JSON 파싱 실패 시 fallback
+        return {
+            'answer': content if 'content' in locals() else 'GPT 응답 파싱 실패',
+            'claims': [],
+            'evidence': [],
+            'missing_info': ['JSON 응답 파싱 실패'],
+            'confidence': 0.5,
+            'actions_suggested': [],
+            '_model': 'gpt',
+            '_error': str(e)
+        }
+    except Exception as e:
+        return {
+            'answer': f'GPT 호출 실패: {str(e)}',
+            'claims': [],
+            'evidence': [],
+            'missing_info': ['GPT API 호출 실패'],
+            'confidence': 0.0,
+            'actions_suggested': [],
+            '_model': 'gpt',
+            '_error': str(e)
+        }
 
 
 def _call_claude(full_message, system_prompt):
@@ -268,7 +356,9 @@ def _call_claude(full_message, system_prompt):
         result = json.loads(content)
         result['_model'] = 'claude'
         result['_model_version'] = model
-        return result
+        
+        # 스키마 검증
+        return validate_ai_response(result)
         
     except json.JSONDecodeError as e:
         # JSON 파싱 실패 시 fallback

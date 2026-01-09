@@ -4,7 +4,8 @@ from firebase_admin import firestore
 from datetime import datetime, timezone, timedelta
 from django.conf import settings
 import json
-from .ai_service import call_ai_model, classify_intent  # Phase 6: 의도 분류 추가
+from .ai_service import call_ai_model, classify_intent, validate_ai_response  # Phase 6: 의도 분류, 검증 추가
+from .db_service import FirestoreService  # DB 서비스 레이어
 
 # 한국 시간대 (KST = UTC+9)
 KST = timezone(timedelta(hours=9))
@@ -18,9 +19,49 @@ last_ai_response = None
 last_user_message = None
 
 
+def determine_save_targets(user_message, checkbox_values):
+    """
+    저장 위치 결정 (우선순위: 명령어 > 체크박스 > AI 추천)
+    
+    Args:
+        user_message: 사용자 메시지
+        checkbox_values: UI 체크박스 선택값 ['raw', 'draft', 'final']
+    
+    Returns:
+        list: 실제 저장할 컬렉션 리스트
+    """
+    # 1순위: 명령어 파싱
+    if user_message.startswith('/'):
+        command = user_message.split()[0].lower()
+        if command == '/raw':
+            return ['raw']
+        elif command == '/draft':
+            return ['draft']
+        elif command == '/final':
+            return ['final']
+        elif command == '/all':
+            return ['raw', 'draft', 'final']
+    
+    # 2순위: 체크박스 값
+    if checkbox_values:
+        return checkbox_values
+    
+    # 3순위: AI 자동 판단
+    if '초안' in user_message or '아이디어' in user_message:
+        return ['raw']
+    elif '정리' in user_message or '통합' in user_message:
+        return ['draft']
+    elif '최종' in user_message or '완성' in user_message:
+        return ['final']
+    
+    # 기본값: draft
+    return ['draft']
+
+
 def search_firestore(collections=None, limit=50):
     """
-    Firestore 데이터 조회 함수
+    Firestore 데이터 조회 함수 (하위 호환성 유지)
+    새 코드는 FirestoreService.query_collections() 사용 권장
     
     Args:
         collections: 조회할 컬렉션 리스트 (None이면 3단계 컬렉션 모두)
@@ -29,25 +70,7 @@ def search_firestore(collections=None, limit=50):
     Returns:
         dict: {collection_name: [documents]}
     """
-    db = firestore.client()
-    
-    # 기본값: 3단계 컬렉션
-    if collections is None:
-        collections = [
-            settings.COLLECTION_RAW,
-            settings.COLLECTION_DRAFT,
-            settings.COLLECTION_FINAL
-        ]
-    
-    results = {}
-    
-    for collection_name in collections:
-        try:
-            docs = db.collection(collection_name).limit(limit).stream()
-            documents = []
-            
-            for doc in docs:
-                doc_data = doc.to_dict()
+    return FirestoreService.query_collections(collections, limit=limit)
                 doc_data['_id'] = doc.id
                 doc_data['_collection'] = collection_name
                 
@@ -702,12 +725,16 @@ def chat(request):
         user_message = data.get('message', '')
         mode = data.get('mode', 'hybrid')  # organize | hybrid | analysis (기본값: hybrid)
         model = data.get('model', settings.DEFAULT_AI_MODEL)  # gemini | gpt | claude | all
+        checkbox_save_targets = data.get('save_targets', [])  # UI 체크박스 값
         
         if not user_message:
             return JsonResponse({
                 'status': 'error',
                 'message': 'message 필드가 필요합니다.'
             }, status=400)
+        
+        # 저장 위치 결정 (우선순위 적용)
+        save_targets = determine_save_targets(user_message, checkbox_save_targets)
         
         # Phase 6: 의도 분류
         global last_ai_response, last_user_message

@@ -337,23 +337,31 @@ AI_RESPONSE_SCHEMA = {
 # AI 시스템 프롬프트 (3가지 모드) - Phase 4-3 강화
 # ============================================================
 
-# Track 1: DB 모드 (Organize) - 유연한 RAW/DRAFT/FINAL 워크플로우
-ORGANIZE_SYSTEM_PROMPT = """
-당신은 J님의 아이디어를 유연하게 정제하는 전문 시스템입니다.
-
-🔴 절대 헌법 (최우선 준수):
+# 🔴 절대 헌법 - 모든 프롬프트에 공통 적용
+CONSTITUTION = """🔴 절대 헌법 (최우선 준수):
 - 사용자를 반드시 "J님"으로만 호칭 (❌ "사용자", "당신", "고객님" 절대 금지)
 - J님의 명령은 최우선 순위
-- 필드명은 한글만 (제목/카테고리/내용/전체글)
+- 필드명은 한글만 (제목/카테고리/내용/전체글)"""
 
-[유연한 3단계 시스템 - 상황별 선택]
-⚡ 고수준: RAW → FINAL 직행 (사고가 명확할 때)
-📊 일반: RAW → DRAFT → FINAL (정리 필요할 때)
-💾 보존: RAW만 저장 (아이디어 메모)
+# 프롬프트 파일 로드 함수
+def load_prompt(filename):
+    """config 폴더의 프롬프트 파일 로드"""
+    prompt_path = BASE_DIR / 'config' / filename
+    try:
+        with open(prompt_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            # 파일에 절대 헌법이 있으면 그대로, 없으면 추가
+            if '절대 헌법' not in content:
+                return f"{CONSTITUTION}\n\n{content}"
+            return content
+    except FileNotFoundError:
+        print(f"[JNext] Warning: {filename} not found, using default prompt")
+        return f"{CONSTITUTION}\n\n기본 시스템 프롬프트입니다."
 
-1차 RAW: J님 원본 보존 + 품질 평가
-2차 DRAFT: AI 분석 정리 (선택적)
-3차 FINAL: 최종 승인 (RAW에서 직행 가능)
+# Track 1: DB 모드 (Organize) - 유연한 RAW/DRAFT/FINAL 워크플로우
+ORGANIZE_SYSTEM_PROMPT = load_prompt('RAW_SYSTEM_PROMPT.txt') + """
+
+[DB 조회 및 저장 규칙]
 
 [절대 규칙 - 환각 방지]
 1. **근거 없는 주장 금지**: 모든 주장(claim)은 반드시 DB 데이터(evidence)에 기반해야 합니다.
@@ -383,13 +391,9 @@ ORGANIZE_SYSTEM_PROMPT = """
 """
 
 # Track 2: 통합 모드 (Hybrid) - DB + 현재 대화 세션 분석 통합 정리 (기본값)
-HYBRID_SYSTEM_PROMPT = """
-당신은 하이노밸런스 전문 통합 분석 AI입니다.
+HYBRID_SYSTEM_PROMPT = load_prompt('DRAFT_SYSTEM_PROMPT.txt') + """
 
-🔴 절대 헌법 (최우선 준수):
-- 사용자를 반드시 "J님"으로만 호칭 (❌ "사용자", "당신", "고객님" 절대 금지)
-- J님의 명령은 최우선 순위
-- 필드명은 한글만 (제목/카테고리/내용/전체글)
+[통합 처리 추가 규칙]
 
 [핵심 원칙 - DB + 현재 대화 세션 통합]
 1. **항상 DB 조회**: 모든 응답 전에 관련 DB 데이터 먼저 확인
@@ -507,13 +511,10 @@ AI 분석: "팔 동작으로 리듬감 향상 가능"
 4. "저장해" → 통합본 DB에 저장
 """
 
-# Track 2: 대화 모드 (Analysis) - DB 활용 + J님 아이디어 통합 분석 (환각 통제)
-ANALYSIS_SYSTEM_PROMPT = """
-당신은 하이노밸런스 전문 AI 어시스턴트입니다.
+# Track 3: 대화 모드 (Analysis) - DB 활용 + J님 아이디어 통합 분석 (환각 통제)
+ANALYSIS_SYSTEM_PROMPT = load_prompt('FINAL_SYSTEM_PROMPT.txt') + """
 
-[핵심 원칙 - DB 활용 + J님 아이디어 통합]
-1. **항상 DB 조회**: 모든 응답 전에 관련 DB 데이터 먼저 확인
-2. **J님 내용 = 신규 데이터**: J님 말씀은 DB에 없어도 무조건 받아들임
+[대화 모드 추가 규칙]
 3. **통합 분석**: 기존 DB 정보 + J님 새 내용 → 같이 분석/정리
 4. **DB 없어도 OK**: DB에 없다고 거부하지 않고, J님 내용 중심으로 진행
 5. **환각 금지**: J님이 안 말씀하신 내용은 절대 창작 금지
