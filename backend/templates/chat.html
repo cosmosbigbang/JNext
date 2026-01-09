@@ -341,24 +341,16 @@
     <div class="container">
         <div class="header">
             <h1>🚀 JNext - AI Chat (J님 전용)</h1>
-            <div class="mode-selector">
-                <button id="mode-data" class="mode-btn active" onclick="setMode('data')">
-                    📊 데이터 모드
-                </button>
-                <button id="mode-chat" class="mode-btn" onclick="setMode('chat')">
-                    🤖 대화 모드
-                </button>
-            </div>
             <div class="controls">
                 <select id="mode-toggle" class="mode-toggle">
-                    <option value="organize">📝 정리 모드</option>
-                    <option value="analysis">🔍 분석 모드</option>
+                    <option value="organize">📊 DB 모드</option>
+                    <option value="hybrid">🔀 통합 모드</option>
+                    <option value="analysis">💬 대화 모드</option>
                 </select>
                 <select id="model-select" class="model-select">
                     <option value="gemini">Gemini 2.5</option>
                     <option value="gpt">GPT-4o (준비중)</option>
                     <option value="claude">Claude 3.5 (준비중)</option>
-                    <option value="all">🔥 3두 체계</option>
                 </select>
             </div>
         </div>
@@ -368,11 +360,13 @@
                 <div class="message-content">
                     <strong>JNext 시스템</strong><br>
                     안녕하세요 J님! 😊<br><br>
+                    <strong>📊 DB 모드:</strong> Firestore DB에서 데이터만 검색<br>
+                    <strong>🔀 통합 모드:</strong> DB + 대화 분석 통합 정리<br>
+                    <strong>💬 대화 모드:</strong> 자유로운 브레인스토밍<br><br>
                     현재 활성화된 기능:<br>
                     ✅ Firestore DB 연동 (RAW/DRAFT/FINAL)<br>
-                    ✅ Gemini 2.5 Flash (JSON 응답 강제)<br>
-                    ✅ 환각 방지 (근거 기반 응답)<br>
-                    ✅ 멀티 모델 지원 준비<br><br>
+                    ✅ Gemini 2.5 Flash<br>
+                    ✅ Render 서버 배포 완료<br><br>
                     무엇을 도와드릴까요?
                 </div>
             </div>

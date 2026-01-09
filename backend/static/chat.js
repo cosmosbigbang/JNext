@@ -21,20 +21,9 @@ const closeModal = document.querySelector('.close');
 let isLoading = false;
 let currentResponseToSave = null;
 let savedResponses = [];  // 응답 저장용 배열
-let currentMode = 'data';  // 'data' 또는 'chat'
+let currentMode = 'hybrid';  // 기본값: hybrid (통합)
 
-// 모드 설정 함수
-function setMode(mode) {
-    currentMode = mode;
-    document.getElementById('mode-data').classList.toggle('active', mode === 'data');
-    document.getElementById('mode-chat').classList.toggle('active', mode === 'chat');
-    
-    const placeholder = mode === 'data' 
-        ? '검색, 저장, 최종본 생성 등 데이터 명령어 입력...'
-        : 'AI에게 질문하세요 (알려줘, 설명해, 분석해 등)...';
-    messageInput.placeholder = placeholder;
-}
-
+// 모드 설정 함수 (제거 - HTML에서 직접 select 사용)
 // Event Listeners
 sendButton.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
@@ -63,14 +52,8 @@ async function sendMessage() {
     const message = messageInput.value.trim();
     if (!message || isLoading) return;
 
-    const mode = modeToggle.value;
+    const mode = modeToggle.value;  // organize, hybrid, analysis
     const model = modelSelect.value;
-
-    // 모드에 따라 메시지 조정
-    let finalMessage = message;
-    if (currentMode === 'chat' && !message.match(/(알려|설명|분석|어때|뭐야|무엇|왜|어떻게)/)) {
-        finalMessage = message + ' 알려줘';
-    }
 
     // UI 업데이트
     addMessage('user', message);
@@ -85,7 +68,7 @@ async function sendMessage() {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                message: finalMessage,
+                message: message,  // finalMessage 제거
                 mode: mode,
                 model: model
             })
