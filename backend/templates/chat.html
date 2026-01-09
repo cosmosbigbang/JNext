@@ -104,6 +104,22 @@
             font-size: 14px;
         }
 
+        .save-targets {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .save-targets label {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .save-targets input[type="checkbox"] {
+            margin-right: 3px;
+            cursor: pointer;
+        }
+
         .chat-area {
             flex: 1;
             overflow-y: auto;
@@ -360,6 +376,12 @@
                     <option value="gpt">💡 진 (창의)</option>
                     <option value="claude">👑 클로 (코딩)</option>
                 </select>
+                <div class="save-targets">
+                    <label style="font-size: 12px; color: white; margin-right: 5px;">저장:</label>
+                    <label style="font-size: 11px; color: white;"><input type="checkbox" id="save-raw"> RAW</label>
+                    <label style="font-size: 11px; color: white;"><input type="checkbox" id="save-draft" checked> DRAFT</label>
+                    <label style="font-size: 11px; color: white;"><input type="checkbox" id="save-final"> FINAL</label>
+                </div>
             </div>
         </div>
 

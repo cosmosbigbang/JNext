@@ -1071,13 +1071,24 @@ JSON 형식:
         last_ai_response = ai_response
         last_user_message = user_message
         
+        # AI가 저장 위치 자동 판단
+        suggested_collections = []
+        if '초안' in user_message or '아이디어' in user_message:
+            suggested_collections = ['raw']
+        elif '정리' in user_message or '통합' in user_message:
+            suggested_collections = ['draft']
+        elif '최종' in user_message or '완성' in user_message:
+            suggested_collections = ['final']
+        
         return JsonResponse({
             'status': 'success',
             'mode': mode,
             'model': model,
             'user_message': user_message,  # 필드명 통일
             'response': ai_response,  # JSON 구조화된 응답
-            'db_documents_count': total_docs
+            'db_documents_count': total_docs,
+            'save_targets': save_targets,  # 실제 저장될 위치
+            'suggested_collections': suggested_collections  # AI 제안
         })
         
     except json.JSONDecodeError:

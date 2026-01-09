@@ -54,6 +54,12 @@ async function sendMessage() {
 
     const mode = modeToggle.value;  // organize, hybrid, analysis
     const model = modelSelect.value;
+    
+    // 저장 위치 체크박스 읽기
+    const saveTargets = [];
+    if (saveRaw && saveRaw.checked) saveTargets.push('raw');
+    if (saveDraft && saveDraft.checked) saveTargets.push('draft');
+    if (saveFinal && saveFinal.checked) saveTargets.push('final');
 
     // UI 업데이트
     addMessage('user', message);
@@ -70,7 +76,8 @@ async function sendMessage() {
             body: JSON.stringify({
                 message: message,  // finalMessage 제거
                 mode: mode,
-                model: model
+                model: model,
+                save_targets: saveTargets  // 저장 위치 전송
             })
         });
 
