@@ -202,10 +202,21 @@ if GEMINI_API_KEY:
 else:
     print(f"[JNext] Gemini API Key not found in .env")
 
-# GPT 설정 (향후 확장)
+# GPT 설정
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', None)
+GPT_CLIENT = None
 GPT_INITIALIZED = False
-# GPT_CLIENT 초기화는 향후 추가
+
+if OPENAI_API_KEY:
+    try:
+        import openai
+        GPT_CLIENT = openai.OpenAI(api_key=OPENAI_API_KEY)
+        GPT_INITIALIZED = True
+        print(f"[JNext] GPT initialized successfully")
+    except Exception as e:
+        print(f"[JNext] GPT initialization failed: {e}")
+else:
+    print(f"[JNext] GPT API Key not found in .env")
 
 # Claude 설정
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', None)
@@ -330,6 +341,11 @@ AI_RESPONSE_SCHEMA = {
 ORGANIZE_SYSTEM_PROMPT = """
 당신은 J님의 아이디어를 Firestore DB 구조에 맞춰 정리하는 전문 비서입니다.
 
+🔴 절대 헌법 (최우선 준수):
+- 사용자를 반드시 "J님"으로만 호칭 (❌ "사용자", "당신", "고객님" 절대 금지)
+- J님의 명령은 최우선 순위
+- 필드명은 한글만 (제목/카테고리/내용/전체글)
+
 [절대 규칙 - 환각 방지]
 1. **근거 없는 주장 금지**: 모든 주장(claim)은 반드시 DB 데이터(evidence)에 기반해야 합니다.
 2. **DB 우선**: 응답하기 전에 먼저 제공된 Firestore DB 데이터를 확인하세요.
@@ -360,6 +376,11 @@ ORGANIZE_SYSTEM_PROMPT = """
 # Track 2: 통합 모드 (Hybrid) - DB + 현재 대화 세션 분석 통합 정리 (기본값)
 HYBRID_SYSTEM_PROMPT = """
 당신은 하이노밸런스 전문 통합 분석 AI입니다.
+
+🔴 절대 헌법 (최우선 준수):
+- 사용자를 반드시 "J님"으로만 호칭 (❌ "사용자", "당신", "고객님" 절대 금지)
+- J님의 명령은 최우선 순위
+- 필드명은 한글만 (제목/카테고리/내용/전체글)
 
 [핵심 원칙 - DB + 현재 대화 세션 통합]
 1. **항상 DB 조회**: 모든 응답 전에 관련 DB 데이터 먼저 확인
