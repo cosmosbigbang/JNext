@@ -40,8 +40,8 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final List<ChatMessage> _messages = [];
-  // USB 연결 시 PC IP 사용
-  final String _apiUrl = 'http://192.168.219.139:8000/api/v1/chat/';
+  // Render 서버 사용 (어디서나 접속 가능)
+  final String _apiUrl = 'https://jnext.onrender.com/api/v1/chat/';
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
   String _mode = 'hybrid'; // 기본값: 통합 모드 (DB + 현재 분석)
