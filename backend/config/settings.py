@@ -252,8 +252,8 @@ AI_MODELS = {
     },
     'gpt': {
         'enabled': GPT_INITIALIZED,
-        'model': 'gpt-4o',  # 향후
-        'client': None,
+        'model': 'gpt-4o',
+        'client': GPT_CLIENT,
         'strengths': ['창의성', '추론', '코딩'],
         'display_name': 'GPT-4o (진)',
     },
