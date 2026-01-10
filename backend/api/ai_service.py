@@ -137,49 +137,42 @@ def classify_intent(user_message):
             'params': {'requires_approval': True}
         }
     
-    # ORGANIZE 의도 (명확한 문서 정리 명령만)
-    # 조건: "정리해서 저장", "합쳐서", "통합해서" 등 구체적 정리 액션
-    organize_patterns = [
-        ('정리', ['저장', '합쳐', '통합', 'draft', 'raw', 'final']),  # "정리" + 저장/통합 관련 키워드
-        ('합쳐', []),  # "합쳐"는 단독으로도 ORGANIZE
-        ('통합해', []),  # "통합해"도 단독 OK
+    # ORGANIZE_AND_SAVE 의도 (정리 후 저장)
+    organize_save_patterns = [
+        '정리해서 저장',
+        '정리하고 저장',
+        '합쳐서 저장',
+        '통합해서 저장',
+        '정리 저장',
     ]
     
-    organize_triggered = False
-    for primary_kw, secondary_kws in organize_patterns:
-        if primary_kw in message_lower:
-            # secondary_kws가 비어있으면 primary만으로 충분
-            if not secondary_kws:
-                organize_triggered = True
-                break
-            # secondary_kws가 있으면 하나라도 포함되어야 함
-            if any(sec_kw in message_lower for sec_kw in secondary_kws):
-                organize_triggered = True
-                break
-    
-    if organize_triggered:
-        params = {
-            'auto_save': False,  # 기본적으로 자동 저장 안함
-            'collection': None
+    if any(pattern in message_lower for pattern in organize_save_patterns):
+        params = {'collection': None}
+        
+        # 저장 위치 감지
+        if 'raw' in message_lower or '원본' in message_lower:
+            params['collection'] = 'hino_raw'
+        elif 'draft' in message_lower or '초안' in message_lower:
+            params['collection'] = 'hino_draft'
+        elif 'final' in message_lower or '최종' in message_lower:
+            params['collection'] = 'hino_final'
+        else:
+            params['collection'] = 'hino_draft'  # 기본값
+        
+        return {
+            'intent': 'ORGANIZE_AND_SAVE',
+            'confidence': 0.95,
+            'params': params
         }
-        
-        # 저장 명령 포함 시 auto_save 활성화
-        if any(k in message_lower for k in ['저장', 'save']):
-            params['auto_save'] = True
-            # 저장 위치 감지
-            if 'raw' in message_lower or '원본' in message_lower:
-                params['collection'] = 'hino_raw'
-            elif 'draft' in message_lower or '초안' in message_lower:
-                params['collection'] = 'hino_draft'
-            elif 'final' in message_lower or '최종' in message_lower:
-                params['collection'] = 'hino_final'
-            else:
-                params['collection'] = 'hino_draft'  # 기본값
-        
+    
+    # ORGANIZE 의도 (정리만)
+    organize_patterns = ['정리해', '합쳐', '통합해', '요약해']
+    
+    if any(pattern in message_lower for pattern in organize_patterns):
         return {
             'intent': 'ORGANIZE',
             'confidence': 0.9,
-            'params': params
+            'params': {}
         }
     
     # GENERATE_FINAL 의도 (최종본 생성/정리)
