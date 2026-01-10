@@ -322,6 +322,11 @@ class _ChatScreenState extends State<ChatScreen> {
                           vertical: 14,
                         ),
                         prefixIcon: const Icon(Icons.chat_bubble_outline),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.keyboard_hide),
+                          onPressed: () => FocusScope.of(context).unfocus(),
+                          tooltip: '키보드 내리기',
+                        ),
                       ),
                       onSubmitted: (_) => _sendMessage(),
                       textInputAction: TextInputAction.send,
