@@ -72,6 +72,18 @@ saveMode.addEventListener('change', () => {
 // 기존 문서 선택 시 내용 로드
 existingDocList.addEventListener('change', loadExistingDoc);
 
+// 문서 클릭 이벤트 위임 (동적으로 생성된 문서 아이템 처리)
+chatArea.addEventListener('click', (e) => {
+    const docContentArea = e.target.closest('.doc-content-area');
+    if (docContentArea) {
+        const docItem = docContentArea.closest('.document-item');
+        const docIndex = parseInt(docItem.dataset.docIndex);
+        if (!isNaN(docIndex) && lastSearchResults[docIndex]) {
+            editDocument(lastSearchResults[docIndex], e);
+        }
+    }
+});
+
 /**
  * 기존 문서 목록 채우기
  */
@@ -219,14 +231,14 @@ function displayAIResponse(data) {
                 <strong>📄 문서 리스트 (${data.document_list.length}개):</strong>
                 <div style="margin-top: 10px;">
                     ${data.document_list.map((doc, idx) => `
-                        <div class="document-item" style="background: white; padding: 10px; margin: 8px 0; border-radius: 6px; border-left: 4px solid #667eea;">
+                        <div class="document-item" style="background: white; padding: 10px; margin: 8px 0; border-radius: 6px; border-left: 4px solid #667eea;" data-doc-index="${idx}">
                             <div style="display: flex; align-items: start;">
                                 <input type="checkbox" class="doc-checkbox" 
                                        data-collection="${doc.collection}" 
                                        data-doc-id="${doc.doc_id}"
                                        onclick="event.stopPropagation()"
                                        style="margin-right: 10px; margin-top: 3px; width: 18px; height: 18px;">
-                                <div style="flex: 1; cursor: pointer;" onclick='editDocument(${JSON.stringify(doc).replace(/'/g, "\\'")}, event)'>
+                                <div style="flex: 1; cursor: pointer;" class="doc-content-area">
                                     <div style="font-weight: 600; color: #2196F3; margin-bottom: 5px; text-decoration: underline;">
                                         ${idx + 1}. ${doc.title || '제목 없음'}
                                     </div>
