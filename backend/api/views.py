@@ -908,7 +908,8 @@ def chat(request):
                 model_name=model,
                 user_message=user_message,
                 system_prompt=system_prompt,  # 모드별 프롬프트 사용
-                db_context=db_context if mode in ['organize', 'hybrid'] else {}
+                db_context=db_context if mode in ['organize', 'hybrid'] else {},
+                mode=mode
             )
             
             # 자유 형식 응답 반환
@@ -929,7 +930,8 @@ def chat(request):
                 model_name=model,
                 user_message=user_message,
                 system_prompt=system_prompt,
-                db_context=db_context if mode in ['organize', 'hybrid'] else {}
+                db_context=db_context if mode in ['organize', 'hybrid'] else {},
+                mode=mode
             )
             
             # 2단계: 저장용 필드 변환 (AI에게 다시 요청)
@@ -958,7 +960,8 @@ def chat(request):
                     model_name=model,
                     user_message=field_extraction_prompt,
                     system_prompt="JSON 형식 변환 전문가입니다. JSON만 출력하세요.",
-                    db_context={}
+                    db_context={},
+                    mode='organize'  # 필드 변환은 엄격하게 (temperature=0.3)
                 )
                 
                 # JSON 파싱
@@ -1176,7 +1179,8 @@ JSON 형식:
             model_name=model,
             user_message=user_message,
             system_prompt=system_prompt,
-            db_context=db_context
+            db_context=db_context,
+            mode=mode
         )
         
         # Phase 6: 세션에 저장

@@ -233,7 +233,7 @@ def classify_intent(user_message):
     }
 
 
-def call_ai_model(model_name, user_message, system_prompt, db_context):
+def call_ai_model(model_name, user_message, system_prompt, db_context, temperature=None, mode='hybrid'):
     """
     AI 모델 호출 (멀티 모델 지원)
     
@@ -242,39 +242,51 @@ def call_ai_model(model_name, user_message, system_prompt, db_context):
         user_message: J님의 메시지
         system_prompt: 시스템 프롬프트
         db_context: Firestore DB 데이터
+        temperature: 창의성 수준 (None이면 mode에 따라 자동 설정)
+        mode: 'organize' | 'hybrid' | 'analysis'
     
     Returns:
         dict: JSON 응답 (AI_RESPONSE_SCHEMA 형식)
     """
+    # Temperature 자동 설정 (mode에 따라)
+    if temperature is None:
+        temperature_map = {
+            'organize': 0.3,  # 사실 중심, 환각 최소화
+            'hybrid': 0.5,    # 균형
+            'analysis': 0.7   # 창의성 허용
+        }
+        temperature = temperature_map.get(mode, 0.5)
+    
     full_message = f"{db_context}\n\nJ님 질문: {user_message}"
     
     # Gemini 계열 (Flash/Pro)
     if model_name in ['gemini-flash', 'gemini-pro']:
-        return _call_gemini(full_message, system_prompt, model_key=model_name)
+        return _call_gemini(full_message, system_prompt, model_key=model_name, temperature=temperature)
     
     # 기본값 fallback
     elif model_name == 'gemini' or not model_name:
-        return _call_gemini(full_message, system_prompt, model_key=settings.DEFAULT_AI_MODEL)
+        return _call_gemini(full_message, system_prompt, model_key=settings.DEFAULT_AI_MODEL, temperature=temperature)
     
     elif model_name == 'gpt':
-        return _call_gpt(full_message, system_prompt)
+        return _call_gpt(full_message, system_prompt, temperature=temperature)
     
     elif model_name == 'claude':
-        return _call_claude(full_message, system_prompt)
+        return _call_claude(full_message, system_prompt, temperature=temperature)
     
     elif model_name == 'all':
         # 3두 체계: 모든 모델 호출 후 비교
-        return _call_all_models(full_message, system_prompt)
+        return _call_all_models(full_message, system_prompt, temperature=temperature)
     
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
 
-def _call_gemini(full_message, system_prompt, model_key='gemini-pro'):
+def _call_gemini(full_message, system_prompt, model_key='gemini-pro', temperature=0.5):
     """Gemini API 호출 (JSON 응답 강제)
     
     Args:
         model_key: 'gemini-flash' | 'gemini-pro'
+        temperature: 창의성 수준 (0.0~1.0)
     """
     if model_key not in settings.AI_MODELS:
         model_key = 'gemini-pro'  # fallback
@@ -291,7 +303,7 @@ def _call_gemini(full_message, system_prompt, model_key='gemini-pro'):
             contents=full_message,
             config={
                 'system_instruction': system_prompt,
-                'temperature': 0.7,
+                'temperature': temperature,  # 모드별 temperature 적용
                 'response_mime_type': 'application/json',  # JSON 강제
                 'response_schema': settings.AI_RESPONSE_SCHEMA,  # 스키마 강제
             }
@@ -319,7 +331,7 @@ def _call_gemini(full_message, system_prompt, model_key='gemini-pro'):
         }
 
 
-def _call_gpt(full_message, system_prompt):
+def _call_gpt(full_message, system_prompt, temperature=0.7):
     """GPT-4o API 호출 (OpenAI)"""
     if not settings.AI_MODELS['gpt']['enabled']:
         raise Exception("GPT not initialized")
@@ -333,7 +345,7 @@ def _call_gpt(full_message, system_prompt):
                 {"role": "system", "content": f"{system_prompt}\n\n반드시 다음 JSON 형식으로만 응답하세요:\n{json.dumps(settings.AI_RESPONSE_SCHEMA, ensure_ascii=False, indent=2)}"},
                 {"role": "user", "content": full_message}
             ],
-            temperature=0.7,
+            temperature=temperature,
             response_format={"type": "json_object"}
         )
         
@@ -371,7 +383,7 @@ def _call_gpt(full_message, system_prompt):
         }
 
 
-def _call_claude(full_message, system_prompt):
+def _call_claude(full_message, system_prompt, temperature=0.7):
     """Claude API 호출"""
     if not settings.AI_MODELS['claude']['enabled']:
         raise Exception("Claude not initialized")
@@ -386,7 +398,7 @@ def _call_claude(full_message, system_prompt):
         response = client.messages.create(
             model=model,
             max_tokens=4096,
-            temperature=0.7,
+            temperature=temperature,
             system=enhanced_prompt,
             messages=[
                 {"role": "user", "content": full_message}
