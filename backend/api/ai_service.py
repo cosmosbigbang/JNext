@@ -60,7 +60,7 @@ def validate_ai_response(response):
 
 def classify_intent(user_message):
     """
-    사용자 메시지에서 의도(Intent) 감지
+    J님의 메시지에서 의도(Intent) 감지
     Phase 6: 자동 CRUD
     
     Returns:

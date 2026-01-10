@@ -6,6 +6,7 @@ from django.conf import settings
 import json
 from .ai_service import call_ai_model, classify_intent, validate_ai_response  # Phase 6: 의도 분류, 검증 추가
 from .db_service import FirestoreService  # DB 서비스 레이어
+from .meme_generator import MemeGenerator  # 밈 생성기
 
 # 한국 시간대 (KST = UTC+9)
 KST = timezone(timedelta(hours=9))
@@ -24,7 +25,7 @@ def determine_save_targets(user_message, checkbox_values):
     저장 위치 결정 (우선순위: 명령어 > 체크박스 > AI 추천)
     
     Args:
-        user_message: 사용자 메시지
+        user_message: J님의 메시지
         checkbox_values: UI 체크박스 선택값 ['raw', 'draft', 'final']
     
     Returns:
@@ -700,7 +701,7 @@ def chat(request):
             'gemini_initialized': settings.GEMINI_INITIALIZED,
             'gemini_model': settings.GEMINI_MODEL if settings.GEMINI_INITIALIZED else None,
             'body': {
-                'message': '사용자 메시지 (필수)',
+                'message': 'J님의 메시지 (필수)',
                 'mode': 'organize 또는 analysis (기본값: organize)'
             },
             'example_curl': 'curl -X POST http://127.0.0.1:8000/api/v1/chat/ -H "Content-Type: application/json" -d "{\\"message\\": \\"안녕하세요\\", \\"mode\\": \\"organize\\"}"'
@@ -1178,14 +1179,64 @@ def save_summary(request):
             '종류': '정리'
         }
         
+        # FINAL 단계에서만 밈 이미지 생성 (비용 최적화)
+        # RAW/DRAFT는 텍스트 필드만 저장
+        meme_generated = False
+        
+        # 밈 텍스트 필드 (모든 단계에서 저장 가능)
+        meme_top = data.get('밈자막상단') or ai_response.get('밈자막상단', '')
+        meme_bottom = data.get('밈자막하단') or ai_response.get('밈자막하단', '')
+        meme_style = data.get('밈스타일') or ai_response.get('밈스타일', '시트콤')
+        meme_character = data.get('밈캐릭터', '지피')  # 기본값: 지피
+        
+        # 텍스트 필드는 항상 저장
+        if meme_top:
+            doc_data['밈자막상단'] = meme_top
+        if meme_bottom:
+            doc_data['밈자막하단'] = meme_bottom
+        if meme_style:
+            doc_data['밈스타일'] = meme_style
+        if meme_character:
+            doc_data['밈캐릭터'] = meme_character
+        
+        # FINAL 단계에서만 실제 이미지 생성
+        if collection == 'hino_final' and (meme_top or meme_bottom):
+            try:
+                # 밈 생성 (시트콤 캐릭터 이미지 사용)
+                meme_gen = MemeGenerator()
+                result = meme_gen.create_meme(
+                    character=meme_character,
+                    top_text=meme_top,
+                    bottom_text=meme_bottom,
+                    style=meme_style
+                )
+                
+                # 이미지 URL 필드 추가
+                doc_data['밈이미지URL'] = result['selected_image_name']
+                doc_data['밈합성이미지URL'] = f"{result['character']}_meme.png"
+                doc_data['밈생성모델'] = '진 (시트콤 캐릭터 + Pillow 합성)'
+                meme_generated = True
+                
+                print(f"[밈 생성 성공] 캐릭터: {result['character']}, 이미지: {result['selected_image_name']}")
+            except Exception as e:
+                print(f"[밈 생성 실패] {str(e)}")
+                import traceback
+                traceback.print_exc()
+                # 실패해도 문서는 저장 (이미지 URL 없이)
+        
         doc_ref = db.collection(collection).add(doc_data)
         doc_id = doc_ref[1].id
         
+        response_message = f'{collection}에 저장되었습니다.'
+        if meme_generated:
+            response_message += ' (밈 이미지 생성 완료)'
+        
         return JsonResponse({
             'status': 'success',
-            'message': f'{collection}에 저장되었습니다.',
+            'message': response_message,
             'doc_id': doc_id,
-            'collection': collection
+            'collection': collection,
+            'meme_generated': meme_generated
         })
         
     except json.JSONDecodeError:
