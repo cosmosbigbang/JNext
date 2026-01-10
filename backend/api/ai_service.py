@@ -137,9 +137,27 @@ def classify_intent(user_message):
             'params': {'requires_approval': True}
         }
     
-    # ORGANIZE 의도 (문서 정리 후 저장)
-    organize_keywords = ['정리', '합쳐', '통합', '요약']
-    if any(keyword in message_lower for keyword in organize_keywords):
+    # ORGANIZE 의도 (명확한 문서 정리 명령만)
+    # 조건: "정리해서 저장", "합쳐서", "통합해서" 등 구체적 정리 액션
+    organize_patterns = [
+        ('정리', ['저장', '합쳐', '통합', 'draft', 'raw', 'final']),  # "정리" + 저장/통합 관련 키워드
+        ('합쳐', []),  # "합쳐"는 단독으로도 ORGANIZE
+        ('통합해', []),  # "통합해"도 단독 OK
+    ]
+    
+    organize_triggered = False
+    for primary_kw, secondary_kws in organize_patterns:
+        if primary_kw in message_lower:
+            # secondary_kws가 비어있으면 primary만으로 충분
+            if not secondary_kws:
+                organize_triggered = True
+                break
+            # secondary_kws가 있으면 하나라도 포함되어야 함
+            if any(sec_kw in message_lower for sec_kw in secondary_kws):
+                organize_triggered = True
+                break
+    
+    if organize_triggered:
         params = {
             'auto_save': False,  # 기본적으로 자동 저장 안함
             'collection': None
