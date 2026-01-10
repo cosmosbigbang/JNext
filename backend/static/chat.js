@@ -36,6 +36,12 @@ messageInput.addEventListener('keypress', (e) => {
     }
 });
 
+// textarea 자동 크기 조절
+messageInput.addEventListener('input', () => {
+    messageInput.style.height = 'auto';
+    messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + 'px';
+});
+
 // 모달 관련 이벤트
 closeModal.addEventListener('click', () => {
     saveModal.style.display = 'none';

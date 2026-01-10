@@ -901,19 +901,43 @@ def chat(request):
                 }
             })
         
-        # ORGANIZE 의도 처리 (정리만)
+        # ORGANIZE 의도 처리 (정리만 - 자연어 자유 대화)
         if intent == 'ORGANIZE':
-            # AI에게 정리 요청
-            organize_prompt = f"""
-J님이 제공한 내용을 정리해서 Firestore에 저장할 수 있는 형태로 구조화해주세요.
+            # 자연어 그대로 AI에게 전달 (JSON 강제 안함)
+            ai_response = call_ai_model(
+                model_name=model,
+                user_message=user_message,
+                system_prompt=system_prompt,  # 모드별 프롬프트 사용
+                db_context=db_context if mode in ['organize', 'hybrid'] else {}
+            )
+            
+            # 자유 형식 응답 반환
+            return JsonResponse({
+                'status': 'success',
+                'action': 'ORGANIZE',
+                'message': '✅ 정리가 완료되었습니다. 저장하려면 "draft에 저장해줘" 또는 "정리해서 저장"이라고 말씀해주세요.',
+                'response': ai_response
+            })
+        
+        # ORGANIZE_AND_SAVE 의도 처리 (정리 후 저장 - 저장 시에만 필드 변환)
+        if intent == 'ORGANIZE_AND_SAVE':
+            params = intent_data['params']
+            target_collection = params.get('collection', 'hino_draft')
+            
+            # 1단계: 자연어로 자유롭게 정리
+            ai_response = call_ai_model(
+                model_name=model,
+                user_message=user_message,
+                system_prompt=system_prompt,
+                db_context=db_context if mode in ['organize', 'hybrid'] else {}
+            )
+            
+            # 2단계: 저장용 필드 변환 (AI에게 다시 요청)
+            field_extraction_prompt = f"""
+아래 정리된 내용을 Firestore 저장용 JSON 필드로 변환해주세요.
 
-**J님의 요청:**
-{user_message}
-
-**작업:**
-1. 제공된 텍스트를 분석하고 핵심 내용 정리
-2. 아래 JSON 형식에 맞춰 필드 채우기
-3. 제목, 카테고리, 내용을 명확하게 작성
+**정리된 내용:**
+{ai_response.get('answer', '')}
 
 **출력 JSON 형식:**
 {{
@@ -929,17 +953,17 @@ J님이 제공한 내용을 정리해서 Firestore에 저장할 수 있는 형�
 """
             
             try:
-                # AI 모델 호출
-                ai_response = call_ai_model(
+                # 필드 변환용 AI 호출
+                field_response = call_ai_model(
                     model_name=model,
-                    user_message=organize_prompt,
-                    system_prompt="당신은 하이노밸런스 이론 정리 전문가입니다. JSON 형식으로만 응답하세요.",
+                    user_message=field_extraction_prompt,
+                    system_prompt="JSON 형식 변환 전문가입니다. JSON만 출력하세요.",
                     db_context={}
                 )
                 
                 # JSON 파싱
                 import re
-                json_match = re.search(r'\{[\s\S]*\}', ai_response.get('answer', ''))
+                json_match = re.search(r'\{[\s\S]*\}', field_response.get('answer', ''))
                 if json_match:
                     organized_data = json.loads(json_match.group(0))
                 else:
@@ -973,97 +997,8 @@ J님이 제공한 내용을 정리해서 Firestore에 저장할 수 있는 형�
                     }
                 }, status=500)
         
-        # ORGANIZE_AND_SAVE 의도 처리 (정리 후 저장)
-        if intent == 'ORGANIZE_AND_SAVE':
-            params = intent_data['params']
-            target_collection = params.get('collection', 'hino_draft')
-            
-            # AI에게 정리 요청
-            organize_prompt = f"""
-J님이 제공한 내용을 정리해서 Firestore에 저장할 수 있는 형태로 구조화해주세요.
-
-**J님의 요청:**
-{user_message}
-
-**작업:**
-1. 제공된 텍스트를 분석하고 핵심 내용 정리
-2. 아래 JSON 형식에 맞춰 필드 채우기
-3. 제목, 카테고리, 내용을 명확하게 작성
-
-**출력 JSON 형식:**
-{{
-    "제목": "문서 제목 (30자 이내)",
-    "카테고리": "하이노이론|하이노워킹|하이노스케이팅|하이노철봉|하이노기본|기타",
-    "내용": "마크다운 형식의 전체 정리 내용",
-    "운동명": "해당되는 경우만 입력",
-    "태그": ["키워드1", "키워드2"],
-    "요약": "한 문장 요약"
-}}
-
-반드시 위 JSON 형식만 출력하세요.
-"""
-            
-            try:
-                # AI 모델 호출
-                ai_response = call_ai_model(
-                    model_name=model,
-                    user_message=organize_prompt,
-                    system_prompt="당신은 하이노밸런스 이론 정리 전문가입니다. JSON 형식으로만 응답하세요.",
-                    db_context={}
-                )
-                
-                # JSON 파싱
-                import re
-                json_match = re.search(r'\{[\s\S]*\}', ai_response.get('answer', ''))
-                if json_match:
-                    organized_data = json.loads(json_match.group(0))
-                else:
-                    raise ValueError("JSON 형식을 찾을 수 없습니다.")
-                
-                # 정리 후 바로 저장
-                db = firestore.client()
-                doc_data = {
-                    '제목': organized_data.get('제목', '정리 문서'),
-                    '카테고리': organized_data.get('카테고리', '기타'),
-                    '내용': organized_data.get('내용', ''),
-                    '운동명': organized_data.get('운동명', ''),
-                    '태그': organized_data.get('태그', []),
-                    '요약': organized_data.get('요약', ''),
-                    '작성일시': now_kst(),
-                    '작성자': 'J님',
-                    '소스': f'{model} 정리'
-                }
-                
-                doc_ref = db.collection(target_collection).add(doc_data)
-                doc_id = doc_ref[1].id
-                
-                return JsonResponse({
-                    'status': 'success',
-                    'action': 'ORGANIZE_AND_SAVE',
-                    'message': f'✅ 정리 완료 및 {target_collection}에 저장했습니다.',
-                    'document_id': doc_id,
-                    'organized_data': organized_data,
-                    'response': {
-                        'answer': f"문서를 정리해서 {target_collection}에 저장했습니다.\n\n제목: {organized_data.get('제목')}",
-                        'claims': [f"카테고리: {organized_data.get('카테고리')}", f"요약: {organized_data.get('요약')}"],
-                        'evidence': [],
-                            'missing_info': [],
-                            'confidence': 0.95
-                        }
-                    })
-                    
-            except Exception as e:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': f'❌ 정리 중 오류: {str(e)}',
-                    'response': {
-                        'answer': f'정리 실패: {str(e)}',
-                        'claims': [],
-                        'evidence': [],
-                        'missing_info': [],
-                        'confidence': 0.0
-                    }
-                }, status=500)
+        # ORGANIZE_AND_SAVE 의도 처리 (정리 후 저장) - 위에서 이미 처리됨
+        # (중복 제거됨)
         
         # GENERATE_FINAL 의도 처리 (자연어 방식)
         if intent == 'GENERATE_FINAL':
