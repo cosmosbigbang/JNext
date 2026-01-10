@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -422,6 +423,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
           ],
         ),
+        ),
       ),
     );
   }
@@ -450,10 +452,20 @@ class ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
+      child: GestureDetector(
+        onLongPress: () {
+          Clipboard.setData(ClipboardData(text: message.text));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('메시지가 복사되었습니다'),
+              duration: Duration(seconds: 1),
+            ),
+          );
+        },
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
           gradient: message.isUser
               ? LinearGradient(
                   colors: [

@@ -744,37 +744,28 @@ def chat(request):
         db_context = ""
         total_docs = 0
         
-        # 긴 입력(200자+) 처리: DB 참고만, 사용자 입력 우선
-        is_long_input = len(user_message) >= 200
-        
         if mode in ['organize', 'hybrid']:
-            if is_long_input:
-                # 긴 입력: DB 요약만 제공
-                db_data = search_firestore()
-                total_docs = sum(len(docs) for docs in db_data.values() if isinstance(docs, list))
-                db_context = f"\n=== DB 참고 ({total_docs}개 문서 존재, 사용자 입력 우선 분석) ===\n"
-            else:
-                # 짧은 입력: DB 상세 정보 제공
-                db_data = search_firestore()
-                db_context = "\n=== 현재 Firestore DB 데이터 ===\n"
-                
-                for collection_name, documents in db_data.items():
-                    if isinstance(documents, list):
-                        doc_count = len(documents)
-                        total_docs += doc_count
-                        db_context += f"\n## {collection_name} ({doc_count}개 문서)\n"
-                        
-                        if doc_count > 0:
-                            for idx, doc in enumerate(documents[:3], 1):  # 3개로 제한
-                                db_context += f"\n### 문서 {idx}\n"
-                                db_context += f"제목: {doc.get('제목', 'N/A')}\n"
-                                db_context += f"카테고리: {doc.get('카테고리', 'N/A')}\n"
-                                content = doc.get('내용', '')
-                                db_context += f"내용: {content[:200]}...\n" if len(content) > 200 else f"내용: {content}\n"
-                        else:
-                            db_context += "- 데이터 없음\n"
-                
-                db_context += f"\n=== 총 {total_docs}개 문서 ===\n"
+            # 항상 DB 상세 제공 (AI가 판단하도록)
+            db_data = search_firestore()
+            db_context = "\n=== 현재 Firestore DB 데이터 ===\n"
+            
+            for collection_name, documents in db_data.items():
+                if isinstance(documents, list):
+                    doc_count = len(documents)
+                    total_docs += doc_count
+                    db_context += f"\n## {collection_name} ({doc_count}개 문서)\n"
+                    
+                    if doc_count > 0:
+                        for idx, doc in enumerate(documents[:3], 1):  # 3개로 제한
+                            db_context += f"\n### 문서 {idx}\n"
+                            db_context += f"제목: {doc.get('제목', 'N/A')}\n"
+                            db_context += f"카테고리: {doc.get('카테고리', 'N/A')}\n"
+                            content = doc.get('내용', '')
+                            db_context += f"내용: {content[:200]}...\n" if len(content) > 200 else f"내용: {content}\n"
+                    else:
+                        db_context += "- 데이터 없음\n"
+            
+            db_context += f"\n=== 총 {total_docs}개 문서 ===\n"
         
         # SAVE 의도 처리
         if intent == 'SAVE':
