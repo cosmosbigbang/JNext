@@ -423,7 +423,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
           ],
         ),
-        ),
       ),
     );
   }
@@ -466,37 +465,37 @@ class ChatBubble extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-          gradient: message.isUser
-              ? LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.primary,
-                    Theme.of(context).colorScheme.secondary,
-                  ],
-                )
-              : null,
-          color: message.isUser ? null : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
-            bottomLeft: message.isUser
-                ? const Radius.circular(20)
-                : const Radius.circular(4),
-            bottomRight: message.isUser
-                ? const Radius.circular(4)
-                : const Radius.circular(20),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+            gradient: message.isUser
+                ? LinearGradient(
+                    colors: [
+                      Theme.of(context).colorScheme.primary,
+                      Theme.of(context).colorScheme.secondary,
+                    ],
+                  )
+                : null,
+            color: message.isUser ? null : Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(20),
+              topRight: const Radius.circular(20),
+              bottomLeft: message.isUser
+                  ? const Radius.circular(20)
+                  : const Radius.circular(4),
+              bottomRight: message.isUser
+                  ? const Radius.circular(4)
+                  : const Radius.circular(20),
             ),
-          ],
-        ),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        child: Column(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.75,
+          ),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -551,8 +550,9 @@ class ChatBubble extends StatelessWidget {
               ],
           ],
         ),
-      ),
-    );
+        ), // Container 닫기
+      ), // GestureDetector 닫기
+    ); // Align 닫기
   }
 }
 
