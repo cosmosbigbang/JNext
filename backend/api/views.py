@@ -1218,7 +1218,7 @@ JSON 형식:
         print(f"[Chat API Error] {error_trace}")
         return JsonResponse({
             'status': 'error',
-            'message': f'Gemini API 호출 실패: {str(e)}',
+            'message': f'AI 호출 실패: {str(e)}',
             'error_type': type(e).__name__,
             'traceback': error_trace
         }, status=500)
