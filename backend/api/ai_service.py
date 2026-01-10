@@ -129,16 +129,18 @@ def classify_intent(user_message):
             'params': {'requires_approval': True}
         }
     
-    # UPDATE 의도 (단, 분석/보고/보여주기 맥락이면 제외)
-    update_keywords = ['수정', 'update', '고쳐', '바꿔', '변경']
-    analysis_context = ['분석', '보고', '추가할', '있는지', '확인', '비교', 
-                         '보여', '먼저', '미리', '보여주', '보여달']
+    # UPDATE 의도 (명령형만 인식: "수정해", "고쳐줘")
+    update_commands = ['수정해', '수정해줘', '고쳐', '고쳐줘', '바꿔', '바꿔줘', '변경해']
+    # 확인/조회는 제외
+    update_excludes = ['수정한', '수정된', '수정 내용', '수정내용', 
+                       '분석', '보고', '추가할', '있는지', '확인', '비교', 
+                       '보여', '먼저', '미리', '보여주', '보여달', '맞냐', '맞나']
     
-    has_update_keyword = any(keyword in message_lower for keyword in update_keywords)
-    has_analysis_context = any(ctx in message_lower for ctx in analysis_context)
+    has_update_command = any(cmd in message_lower for cmd in update_commands)
+    has_exclude = any(exc in message_lower for exc in update_excludes)
     
-    if has_update_keyword and not has_analysis_context:
-        # "수정해" 단독 명령만 UPDATE
+    if has_update_command and not has_exclude:
+        # "수정해" 명령형만 UPDATE
         return {
             'intent': 'UPDATE',
             'confidence': 0.85,
