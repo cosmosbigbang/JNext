@@ -61,13 +61,19 @@ def validate_ai_response(response):
 def classify_intent(user_message):
     """
     J님의 의도(Intent) 감지
-    설계 철학: CRUD 명령어는 "해"로 끝남, 나머지는 자연어 처리
     
-    CRUD 명령어:
-    - 저장해, 검색해, 수정해, 삭제해
+    설계 철학:
+    1. 데이터 보호: CRUD 명령만 DB 영향
+    2. AI 자연어 이해: 제한 없이 활용
     
-    나머지:
-    - 모두 ORGANIZE (자연어 처리)
+    CRUD (DB 영향):
+    - 저장해, 삭제해: 엄격 (단독 명령만)
+    - 수정해: 엄격 (단독 명령만, "수정해서" 제외)
+    - 검색/보여줘: 유연 (자연어 허용)
+    
+    ORGANIZE (DB 영향 없음):
+    - "수정해서 보여달라" = AI가 수정안 생성 → 보여주기
+    - "저장해" 명령 전까지 DB 안 건드림
     
     Returns:
         dict: {
@@ -79,73 +85,73 @@ def classify_intent(user_message):
     message = user_message.strip()
     message_lower = message.lower()
     
-    # CRUD 명령어 매핑 (해로 끝남)
-    CRUD_COMMANDS = {
-        '저장해': 'SAVE',
-        '저장해줘': 'SAVE',
-        '기록해': 'SAVE',
-        '보관해': 'SAVE',
-        
-        '검색해': 'READ',
-        '검색해줘': 'READ',
-        '가져와': 'READ',
-        '가져와줘': 'READ',
-        '찾아줘': 'READ',
-        '조회해': 'READ',
-        
-        '수정해': 'UPDATE',
-        '수정해줘': 'UPDATE',
-        '고쳐': 'UPDATE',
-        '고쳐줘': 'UPDATE',
-        '바꿔': 'UPDATE',
-        '바꿔줘': 'UPDATE',
-        '변경해': 'UPDATE',
-        
-        '삭제해': 'DELETE',
-        '삭제해줘': 'DELETE',
-        '지워': 'DELETE',
-        '지워줘': 'DELETE',
-        '제거해': 'DELETE',
-    }
-    
-    # CRUD 명령어 체크
-    for command, intent in CRUD_COMMANDS.items():
-        if command in message_lower:
-            params = {}
-            
-            # SAVE 파라미터
-            if intent == 'SAVE':
-                params['collection'] = 'hino_final' if any(k in message_lower for k in ['최종', 'final', '완료']) else 'hino_draft'
-                params['target'] = 'last_response'
-            
-            # READ 파라미터
-            elif intent == 'READ':
-                params['collections'] = []
-                if 'draft' in message_lower or '초안' in message_lower:
-                    params['collections'].append('hino_draft')
-                if 'final' in message_lower or '최종' in message_lower:
-                    params['collections'].append('hino_final')
-                if 'raw' in message_lower or '원본' in message_lower:
-                    params['collections'].append('hino_raw')
-                
-                # 카테고리 필터링
-                categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본']
-                for category in categories:
-                    if category in message:
-                        params['category'] = category
-                        break
-            
-            # UPDATE/DELETE 파라미터
-            elif intent in ['UPDATE', 'DELETE']:
-                params['requires_approval'] = True
-            
+    # SAVE (엄격: 단독 명령만)
+    if any(cmd in message_lower for cmd in ['저장해', '저장해줘', '기록해', '보관해']):
+        # 제외: "저장해서", "저장하고" 등
+        if not any(exc in message_lower for exc in ['저장해서', '저장해도', '저장하고', '저장하면']):
+            params = {
+                'collection': 'hino_final' if any(k in message_lower for k in ['최종', 'final', '완료']) else 'hino_draft',
+                'target': 'last_response'
+            }
             return {
-                'intent': intent,
+                'intent': 'SAVE',
                 'confidence': 0.95,
                 'params': params
             }
     
-    # CRUD 명령어 아님 → ORGANIZE (자연어 처리)
+    # DELETE (엄격: 단독 명령만)
+    if any(cmd in message_lower for cmd in ['삭제해', '삭제해줘', '지워', '지워줘', '제거해']):
+        if not any(exc in message_lower for exc in ['삭제해서', '삭제하고', '삭제하면']):
+            return {
+                'intent': 'DELETE',
+                'confidence': 0.95,
+                'params': {'requires_approval': True}
+            }
+    
+    # UPDATE (엄격: 단독 명령만, "수정해서" 제외)
+    if any(cmd in message_lower for cmd in ['수정해', '수정해줘', '고쳐', '고쳐줘', '바꿔', '바꿔줘', '변경해']):
+        # 제외: "수정해서 보여달라" = ORGANIZE (AI가 수정안 생성만)
+        if not any(exc in message_lower for exc in ['수정해서', '수정해도', '수정하고', '수정하면']):
+            return {
+                'intent': 'UPDATE',
+                'confidence': 0.95,
+                'params': {'requires_approval': True}
+            }
+    
+    # READ (유연: 자연어 허용)
+    read_patterns = [
+        '검색해', '검색해줘', '가져와', '가져와줘', '찾아줘', '조회해',
+        '보여줘', '보여주', '알려줘', '알려주',  # 자연어
+        '전체', '목록', '리스트', '내용',  # 문맥
+        '하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스'  # 카테고리
+    ]
+    
+    if any(pattern in message_lower for pattern in read_patterns):
+        params = {'collections': []}
+        
+        # 컬렉션 필터링
+        if 'draft' in message_lower or '초안' in message_lower:
+            params['collections'].append('hino_draft')
+        if 'final' in message_lower or '최종' in message_lower:
+            params['collections'].append('hino_final')
+        if 'raw' in message_lower or '원본' in message_lower:
+            params['collections'].append('hino_raw')
+        
+        # 카테고리 필터링
+        categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스']
+        for category in categories:
+            if category in message:
+                params['category'] = category
+                break
+        
+        return {
+            'intent': 'READ',
+            'confidence': 0.95,
+            'params': params
+        }
+    
+    # ORGANIZE (자연어 처리, DB 영향 없음)
+    # "수정해서 보여달라" = AI가 수정안 생성 → 보여주기만
     return {
         'intent': 'ORGANIZE',
         'confidence': 0.95,
