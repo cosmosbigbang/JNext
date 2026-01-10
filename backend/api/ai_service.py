@@ -128,9 +128,15 @@ def classify_intent(user_message):
             'params': {'requires_approval': True}
         }
     
-    # UPDATE 의도
+    # UPDATE 의도 (단, 분석/보고 맥락이면 제외)
     update_keywords = ['수정', 'update', '고쳐', '바꿔', '변경']
-    if any(keyword in message_lower for keyword in update_keywords):
+    analysis_context = ['분석', '보고', '추가할', '있는지', '확인', '비교']
+    
+    has_update_keyword = any(keyword in message_lower for keyword in update_keywords)
+    has_analysis_context = any(ctx in message_lower for ctx in analysis_context)
+    
+    if has_update_keyword and not has_analysis_context:
+        # "수정해" 단독 명령만 UPDATE
         return {
             'intent': 'UPDATE',
             'confidence': 0.85,
