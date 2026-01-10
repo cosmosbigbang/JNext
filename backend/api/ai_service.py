@@ -148,21 +148,6 @@ def classify_intent(user_message):
             'confidence': 0.95,
             'params': params
         }
-            if 'raw' in message_lower or '원본' in message_lower:
-                params['collections'].append('hino_raw')
-            
-            # 카테고리 필터링
-            categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스']
-            for category in categories:
-                if category in message:
-                    params['category'] = category
-                    break
-            
-            return {
-                'intent': 'READ',
-                'confidence': 0.95,
-                'params': params
-            }
     
     # ORGANIZE (자연어 처리, DB 영향 없음)
     # "수정해서 보여달라" = AI가 수정안 생성 → 보여주기만
