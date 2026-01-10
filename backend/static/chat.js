@@ -9,6 +9,9 @@ const messageInput = document.getElementById('message-input');
 const sendButton = document.getElementById('send-button');
 const modeToggle = document.getElementById('mode-toggle');
 const modelSelect = document.getElementById('model-select');
+const saveRaw = document.getElementById('save-raw');
+const saveDraft = document.getElementById('save-draft');
+const saveFinal = document.getElementById('save-final');
 const saveModal = document.getElementById('save-modal');
 const saveTitle = document.getElementById('save-title');
 const saveCategory = document.getElementById('save-category');
@@ -27,7 +30,8 @@ let currentMode = 'hybrid';  // 기본값: hybrid (통합)
 // Event Listeners
 sendButton.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !isLoading) {
+    if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
+        e.preventDefault();
         sendMessage();
     }
 });

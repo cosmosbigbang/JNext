@@ -196,6 +196,11 @@
             font-size: 15px;
             outline: none;
             transition: border 0.3s;
+            resize: none;
+            font-family: inherit;
+            line-height: 1.5;
+            max-height: 150px;
+            overflow-y: auto;
         }
 
         #message-input:focus {
@@ -403,12 +408,12 @@
         </div>
 
         <div class="input-area">
-            <input 
-                type="text" 
+            <textarea 
                 id="message-input" 
-                placeholder="J님의 메시지를 입력하세요..."
+                placeholder="J님의 메시지를 입력하세요... (Shift+Enter: 줄바꿈, Enter: 전송)"
                 autocomplete="off"
-            />
+                rows="1"
+            ></textarea>
             <button id="send-button">전송</button>
         </div>
     </div>
