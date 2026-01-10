@@ -469,26 +469,41 @@ class ChatBubble extends StatelessWidget {
                 message.responseData!['document_list'] != null)
               ...[
                 const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.description, size: 16, color: Colors.blue),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${message.responseData!['document_list'].length}개 문서',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.blue,
-                          fontWeight: FontWeight.w500,
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DocumentListScreen(
+                          documents: message.responseData!['document_list'],
                         ),
                       ),
-                    ],
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.description, size: 18, color: Colors.blue),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${message.responseData!['document_list'].length}개 문서 보기',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.blue,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.blue),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -510,7 +525,9 @@ class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<dynamic> _documents = [];
   bool _isLoading = false;
-  final String _apiUrl = 'http://192.168.219.139:8000/api/v1/chat/';
+  final String _apiUrl = 'https://jnext.onrender.com/api/v1/chat/';
+  final String _getDocUrl = 'https://jnext.onrender.com/api/v1/get-document/';
+  final String _saveSummaryUrl = 'https://jnext.onrender.com/api/v1/save-summary/';
 
   Future<void> _search() async {
     final query = _searchController.text.trim();
@@ -714,35 +731,10 @@ class _SearchScreenState extends State<SearchScreen> {
                         ],
                       ),
                       trailing: Icon(
-                        Icons.chevron_right,
-                        color: Colors.grey[400],
+                        Icons.edit,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            title: Text(
-                              doc['title'] ?? 'N/A',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            content: SingleChildScrollView(
-                              child: Text(
-                                doc['preview'] ?? '',
-                                style: const TextStyle(height: 1.5),
-                              ),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('닫기'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                      onTap: () => _showEditModal(doc),
                     ),
                   );
                 },
@@ -751,5 +743,453 @@ class _SearchScreenState extends State<SearchScreen> {
         ],
       ),
     );
+  }
+
+  // 문서 편집 모달
+  Future<void> _showEditModal(Map<String, dynamic> doc) async {
+    // 전체 문서 불러오기
+    final fullDoc = await _getFullDocument(doc['collection'], doc['doc_id']);
+    if (fullDoc == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ 문서를 불러올 수 없습니다')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    final titleController = TextEditingController(text: fullDoc['제목'] ?? fullDoc['title'] ?? '');
+    final contentController = TextEditingController(text: fullDoc['내용'] ?? '');
+    String selectedCategory = fullDoc['카테고리'] ?? fullDoc['category'] ?? '하이노이론';
+    String selectedCollection = doc['collection'] ?? 'hino_draft';
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('✏️ 문서 편집', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 제목
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: '제목',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // 카테고리
+                DropdownButtonFormField<String>(
+                  value: selectedCategory,
+                  decoration: const InputDecoration(
+                    labelText: '카테고리',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: '하이노이론', child: Text('하이노이론')),
+                    DropdownMenuItem(value: '하이노워킹', child: Text('하이노워킹')),
+                    DropdownMenuItem(value: '하이노스케이팅', child: Text('하이노스케이팅')),
+                    DropdownMenuItem(value: '하이노철봉', child: Text('하이노철봉')),
+                    DropdownMenuItem(value: '하이노기본', child: Text('하이노기본')),
+                    DropdownMenuItem(value: '하이노밸런스', child: Text('하이노밸런스')),
+                    DropdownMenuItem(value: '기타', child: Text('기타')),
+                  ],
+                  onChanged: (value) => setState(() => selectedCategory = value!),
+                ),
+                const SizedBox(height: 16),
+                // 컬렉션 선택
+                DropdownButtonFormField<String>(
+                  value: selectedCollection,
+                  decoration: const InputDecoration(
+                    labelText: '저장 위치',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'hino_raw', child: Text('💭 Raw (아이디어)')),
+                    DropdownMenuItem(value: 'hino_draft', child: Text('📝 Draft (초안)')),
+                    DropdownMenuItem(value: 'hino_final', child: Text('✅ Final (최종)')),
+                  ],
+                  onChanged: (value) => setState(() => selectedCollection = value!),
+                ),
+                const SizedBox(height: 16),
+                // 내용
+                TextField(
+                  controller: contentController,
+                  decoration: const InputDecoration(
+                    labelText: '내용',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 10,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _saveDocument(
+                  docId: doc['doc_id'],
+                  sourceCollection: doc['collection'],
+                  targetCollection: selectedCollection,
+                  title: titleController.text,
+                  category: selectedCategory,
+                  content: contentController.text,
+                );
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 전체 문서 가져오기
+  Future<Map<String, dynamic>?> _getFullDocument(String collection, String docId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_getDocUrl?collection=$collection&doc_id=$docId'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (data['status'] == 'success') {
+          return data['document'];
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 문서 저장 (생성 또는 수정/이동)
+  Future<void> _saveDocument({
+    String? docId,
+    required String sourceCollection,
+    required String targetCollection,
+    required String title,
+    required String category,
+    required String content,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(_saveSummaryUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'doc_id': docId,
+          'source_collection': sourceCollection,
+          'collection': targetCollection,
+          'title': title,
+          'category': category,
+          'content': content,
+          'original_message': '',
+          'ai_response': {},
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (data['status'] == 'success') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(data['message'] ?? '✅ 저장되었습니다')),
+            );
+            // 검색 결과 새로고침
+            _search();
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ 저장 실패: $e')),
+        );
+      }
+    }
+  }
+}
+
+// 문서 리스트 화면 (채팅에서 문서 클릭 시)
+class DocumentListScreen extends StatefulWidget {
+  final List<dynamic> documents;
+
+  const DocumentListScreen({super.key, required this.documents});
+
+  @override
+  State<DocumentListScreen> createState() => _DocumentListScreenState();
+}
+
+class _DocumentListScreenState extends State<DocumentListScreen> {
+  final String _getDocUrl = 'https://jnext.onrender.com/api/v1/get-document/';
+  final String _saveSummaryUrl = 'https://jnext.onrender.com/api/v1/save-summary/';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: Text(
+          '문서 리스트 (${widget.documents.length}개)',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+      ),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: widget.documents.length,
+        itemBuilder: (context, index) {
+          final doc = widget.documents[index];
+          return Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(16),
+              leading: CircleAvatar(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                child: Text(
+                  '${index + 1}',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+              title: Text(
+                doc['title'] ?? 'N/A',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          doc['collection'] ?? 'N/A',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        doc['category'] ?? 'N/A',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    doc['preview'] ?? '',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+              trailing: Icon(
+                Icons.edit,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              onTap: () => _showEditModal(doc),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // 문서 편집 모달 (SearchScreen과 동일)
+  Future<void> _showEditModal(Map<String, dynamic> doc) async {
+    final fullDoc = await _getFullDocument(doc['collection'], doc['doc_id']);
+    if (fullDoc == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ 문서를 불러올 수 없습니다')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    final titleController = TextEditingController(text: fullDoc['제목'] ?? fullDoc['title'] ?? '');
+    final contentController = TextEditingController(text: fullDoc['내용'] ?? '');
+    String selectedCategory = fullDoc['카테고리'] ?? fullDoc['category'] ?? '하이노이론';
+    String selectedCollection = doc['collection'] ?? 'hino_draft';
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('✏️ 문서 편집', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: '제목',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedCategory,
+                  decoration: const InputDecoration(
+                    labelText: '카테고리',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: '하이노이론', child: Text('하이노이론')),
+                    DropdownMenuItem(value: '하이노워킹', child: Text('하이노워킹')),
+                    DropdownMenuItem(value: '하이노스케이팅', child: Text('하이노스케이팅')),
+                    DropdownMenuItem(value: '하이노철봉', child: Text('하이노철봉')),
+                    DropdownMenuItem(value: '하이노기본', child: Text('하이노기본')),
+                    DropdownMenuItem(value: '하이노밸런스', child: Text('하이노밸런스')),
+                    DropdownMenuItem(value: '기타', child: Text('기타')),
+                  ],
+                  onChanged: (value) => setState(() => selectedCategory = value!),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedCollection,
+                  decoration: const InputDecoration(
+                    labelText: '저장 위치',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'hino_raw', child: Text('💭 Raw (아이디어)')),
+                    DropdownMenuItem(value: 'hino_draft', child: Text('📝 Draft (초안)')),
+                    DropdownMenuItem(value: 'hino_final', child: Text('✅ Final (최종)')),
+                  ],
+                  onChanged: (value) => setState(() => selectedCollection = value!),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: contentController,
+                  decoration: const InputDecoration(
+                    labelText: '내용',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 10,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _saveDocument(
+                  docId: doc['doc_id'],
+                  sourceCollection: doc['collection'],
+                  targetCollection: selectedCollection,
+                  title: titleController.text,
+                  category: selectedCategory,
+                  content: contentController.text,
+                );
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>?> _getFullDocument(String collection, String docId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_getDocUrl?collection=$collection&doc_id=$docId'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (data['status'] == 'success') {
+          return data['document'];
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> _saveDocument({
+    String? docId,
+    required String sourceCollection,
+    required String targetCollection,
+    required String title,
+    required String category,
+    required String content,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(_saveSummaryUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'doc_id': docId,
+          'source_collection': sourceCollection,
+          'collection': targetCollection,
+          'title': title,
+          'category': category,
+          'content': content,
+          'original_message': '',
+          'ai_response': {},
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (data['status'] == 'success') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(data['message'] ?? '✅ 저장되었습니다')),
+            );
+            // 화면 닫기
+            Navigator.pop(context);
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ 저장 실패: $e')),
+        );
+      }
+    }
   }
 }
