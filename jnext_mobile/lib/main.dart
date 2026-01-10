@@ -80,9 +80,9 @@ class _ChatScreenState extends State<ChatScreen> {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'message': message, 'mode': _mode, 'model': _model}),
       ).timeout(
-        const Duration(seconds: 15),
+        const Duration(seconds: 60),
         onTimeout: () {
-          throw Exception('서버 응답 시간 초과 (15초)');
+          throw Exception('서버 응답 시간 초과 (60초)');
         },
       );
 
