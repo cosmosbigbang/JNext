@@ -722,6 +722,39 @@ def chat(request):
         # 저장 위치 결정 (우선순위 적용)
         save_targets = determine_save_targets(user_message, checkbox_save_targets)
         
+        # 모드에 따른 시스템 프롬프트 선택 (Intent 처리 전에 정의)
+        if mode == 'organize':
+            system_prompt = settings.ORGANIZE_SYSTEM_PROMPT
+        elif mode == 'hybrid':
+            system_prompt = settings.HYBRID_SYSTEM_PROMPT
+        elif mode == 'analysis':
+            system_prompt = settings.ANALYSIS_SYSTEM_PROMPT
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'mode는 "organize", "hybrid" 또는 "analysis"만 가능합니다.'
+            }, status=400)
+        
+        # DB 데이터 조회 (Intent 처리 전에 준비)
+        db_data = search_firestore()
+        db_context = "\n=== 현재 Firestore DB 데이터 ===\n"
+        total_docs = 0
+        
+        for collection_name, documents in db_data.items():
+            if isinstance(documents, list):
+                doc_count = len(documents)
+                total_docs += doc_count
+                db_context += f"\n## {collection_name} ({doc_count}개 문서)\n"
+                
+                if doc_count > 0:
+                    for idx, doc in enumerate(documents[:10], 1):
+                        db_context += f"\n### 문서 {idx} (ID: {doc.get('_id', 'unknown')})\n"
+                        db_context += f"```json\n{json.dumps(doc, ensure_ascii=False, indent=2)}\n```\n"
+                else:
+                    db_context += "- 데이터 없음\n"
+        
+        db_context += f"\n=== 총 {total_docs}개 문서 조회됨 ===\n"
+        
         # Phase 6: 의도 분류
         global last_ai_response, last_user_message
         intent_data = classify_intent(user_message)
@@ -1139,41 +1172,6 @@ JSON 형식:
             })
         
         # 일반 질문 (NONE)
-        # 모드에 따른 시스템 프롬프트 선택
-        if mode == 'organize':
-            system_prompt = settings.ORGANIZE_SYSTEM_PROMPT
-        elif mode == 'hybrid':
-            system_prompt = settings.HYBRID_SYSTEM_PROMPT
-        elif mode == 'analysis':
-            system_prompt = settings.ANALYSIS_SYSTEM_PROMPT
-        else:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'mode는 "organize", "hybrid" 또는 "analysis"만 가능합니다.'
-            }, status=400)
-        
-        # Phase 4-2: Firestore 데이터 조회
-        db_data = search_firestore()
-        
-        # DB 데이터를 텍스트로 변환
-        db_context = "\n=== 현재 Firestore DB 데이터 ===\n"
-        total_docs = 0
-        
-        for collection_name, documents in db_data.items():
-            if isinstance(documents, list):
-                doc_count = len(documents)
-                total_docs += doc_count
-                db_context += f"\n## {collection_name} ({doc_count}개 문서)\n"
-                
-                if doc_count > 0:
-                    for idx, doc in enumerate(documents[:10], 1):
-                        db_context += f"\n### 문서 {idx} (ID: {doc.get('_id', 'unknown')})\n"
-                        db_context += f"```json\n{json.dumps(doc, ensure_ascii=False, indent=2)}\n```\n"
-                else:
-                    db_context += "- 데이터 없음\n"
-        
-        db_context += f"\n=== 총 {total_docs}개 문서 조회됨 ===\n"
-        
         # Phase 4-3: 멀티 모델 AI 호출 (JSON 응답 강제)
         ai_response = call_ai_model(
             model_name=model,
