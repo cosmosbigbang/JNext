@@ -72,10 +72,11 @@ def classify_intent(user_message):
     """
     message_lower = user_message.lower()
     
-    # SAVE 의도 (명령형만 인식, 계획/미래형 제외)
+    # SAVE 의도 (명령형만 인식, 계획/미래형/조건부 제외)
     save_keywords = ['저장해', '저장해줘', '기록해', '보관해']
     # 제외: '저장하자', '저장할게', '저장할까' 등 계획/제안형
-    save_excludes = ['저장하자', '저장할게', '저장할까', '저장하면', '저장되면']
+    save_excludes = ['저장하자', '저장할게', '저장할까', '저장하면', '저장되면', 
+                     '먼저', '보여주고', '승인', '확인', '검토']
     
     if any(keyword in message_lower for keyword in save_keywords) and \
        not any(keyword in message_lower for keyword in save_excludes):
@@ -128,9 +129,9 @@ def classify_intent(user_message):
             'params': {'requires_approval': True}
         }
     
-    # UPDATE 의도 (단, 분석/보고 맥락이면 제외)
+    # UPDATE 의도 (단, 분석/보고/보여주기 맥락이면 제외)
     update_keywords = ['수정', 'update', '고쳐', '바꿔', '변경']
-    analysis_context = ['분석', '보고', '추가할', '있는지', '확인', '비교']
+    analysis_context = ['분석', '보고', '추가할', '있는지', '확인', '비교', '보여', '먼저']
     
     has_update_keyword = any(keyword in message_lower for keyword in update_keywords)
     has_analysis_context = any(ctx in message_lower for ctx in analysis_context)
