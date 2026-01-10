@@ -918,6 +918,36 @@ def chat(request):
                 }
             })
         
+        # UPDATE 의도 처리 (문서 수정)
+        if intent == 'UPDATE':
+            return JsonResponse({
+                'status': 'info',
+                'action': 'UPDATE',
+                'message': '⚠️ 문서 수정 기능이 준비 중입니다. 현재는 다음과 같이 사용해주세요:\n1. "하이노밸런스 이론 검색" (문서 조회)\n2. 내용 확인 후 새로 작성\n3. "저장해줘" (새 버전 저장)',
+                'response': {
+                    'answer': '문서 수정 기능이 곧 추가됩니다. 임시로 검색 → 새 작성 → 저장 방식을 사용해주세요.',
+                    'claims': ['UPDATE Intent 감지됨', '승인 대기 중'],
+                    'evidence': [],
+                    'missing_info': ['수정할 문서 ID 또는 제목'],
+                    'confidence': 0.5
+                }
+            })
+        
+        # DELETE 의도 처리 (문서 삭제)
+        if intent == 'DELETE':
+            return JsonResponse({
+                'status': 'info',
+                'action': 'DELETE',
+                'message': '⚠️ 문서 삭제 기능이 준비 중입니다. 현재는 Firestore 콘솔에서 직접 삭제해주세요.',
+                'response': {
+                    'answer': '삭제 기능이 곧 추가됩니다. 임시로 Firebase Console을 이용해주세요.',
+                    'claims': ['DELETE Intent 감지됨', '승인 대기 중'],
+                    'evidence': [],
+                    'missing_info': ['삭제할 문서 ID'],
+                    'confidence': 0.5
+                }
+            })
+        
         # ORGANIZE 의도 처리 (정리만 - 자연어 자유 대화)
         if intent == 'ORGANIZE':
             # DB 조회 (organize/hybrid 모드일 때만)
@@ -1255,8 +1285,10 @@ JSON 형식:
 @csrf_exempt
 def save_summary(request):
     """
-    [POST] AI 답변 저장
-    J님이 편집한 정리 내용을 hino_draft 또는 hino_final에 저장
+    [POST] AI 답변 저장 또는 수정
+    - 새 문서 생성: doc_id 없음
+    - 기존 문서 수정: doc_id 제공
+    - 컬렉션 이동: source_collection + doc_id 제공
     """
     if request.method != 'POST':
         return JsonResponse({
@@ -1274,13 +1306,17 @@ def save_summary(request):
         original_message = data.get('original_message', '')
         ai_response = data.get('ai_response', {})
         
+        # UPDATE 모드: 기존 문서 수정
+        doc_id = data.get('doc_id')  # 수정할 문서 ID
+        source_collection = data.get('source_collection')  # 원본 컬렉션 (이동 시)
+        
         if not content:
             return JsonResponse({
                 'status': 'error',
                 'message': '내용이 비어있습니다.'
             }, status=400)
         
-        # Firestore에 저장
+        # Firestore 초기화
         db = firestore.client()
         
         # 데이터 상태 결정
@@ -1349,20 +1385,68 @@ def save_summary(request):
                 traceback.print_exc()
                 # 실패해도 문서는 저장 (이미지 URL 없이)
         
-        doc_ref = db.collection(collection).add(doc_data)
-        doc_id = doc_ref[1].id
+        # UPDATE 모드: 기존 문서 수정 또는 컬렉션 이동
+        if doc_id and source_collection:
+            # 컬렉션 이동: 원본 삭제 + 새 컬렉션에 저장
+            try:
+                db.collection(source_collection).document(doc_id).delete()
+                print(f"[컬렉션 이동] {source_collection}/{doc_id} → {collection}")
+            except Exception as e:
+                print(f"[원본 삭제 실패] {str(e)}")
+            
+            # 새 문서 생성
+            doc_ref = db.collection(collection).add(doc_data)
+            new_doc_id = doc_ref[1].id
+            
+            response_message = f'{source_collection} → {collection}로 이동되었습니다.'
+            if meme_generated:
+                response_message += ' (밈 이미지 생성 완료)'
+            
+            return JsonResponse({
+                'status': 'success',
+                'action': 'MOVE',
+                'message': response_message,
+                'doc_id': new_doc_id,
+                'source_collection': source_collection,
+                'target_collection': collection,
+                'meme_generated': meme_generated
+            })
         
-        response_message = f'{collection}에 저장되었습니다.'
-        if meme_generated:
-            response_message += ' (밈 이미지 생성 완료)'
+        elif doc_id:
+            # 같은 컬렉션 내 수정
+            doc_data['수정일시'] = now_kst()
+            db.collection(collection).document(doc_id).update(doc_data)
+            
+            response_message = f'{collection}의 문서가 수정되었습니다.'
+            if meme_generated:
+                response_message += ' (밈 이미지 생성 완료)'
+            
+            return JsonResponse({
+                'status': 'success',
+                'action': 'UPDATE',
+                'message': response_message,
+                'doc_id': doc_id,
+                'collection': collection,
+                'meme_generated': meme_generated
+            })
         
-        return JsonResponse({
-            'status': 'success',
-            'message': response_message,
-            'doc_id': doc_id,
-            'collection': collection,
-            'meme_generated': meme_generated
-        })
+        else:
+            # CREATE 모드: 새 문서 생성
+            doc_ref = db.collection(collection).add(doc_data)
+            new_doc_id = doc_ref[1].id
+            
+            response_message = f'{collection}에 저장되었습니다.'
+            if meme_generated:
+                response_message += ' (밈 이미지 생성 완료)'
+            
+            return JsonResponse({
+                'status': 'success',
+                'action': 'CREATE',
+                'message': response_message,
+                'doc_id': new_doc_id,
+                'collection': collection,
+                'meme_generated': meme_generated
+            })
         
     except json.JSONDecodeError:
         return JsonResponse({

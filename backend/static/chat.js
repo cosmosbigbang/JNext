@@ -17,6 +17,9 @@ const saveTitle = document.getElementById('save-title');
 const saveCategory = document.getElementById('save-category');
 const saveContent = document.getElementById('save-content');
 const saveCollection = document.getElementById('save-collection');
+const saveMode = document.getElementById('save-mode');
+const existingDocSelector = document.getElementById('existing-doc-selector');
+const existingDocList = document.getElementById('existing-doc-list');
 const confirmSaveBtn = document.getElementById('confirm-save-btn');
 const closeModal = document.querySelector('.close');
 
@@ -25,6 +28,7 @@ let isLoading = false;
 let currentResponseToSave = null;
 let savedResponses = [];  // 응답 저장용 배열
 let currentMode = 'hybrid';  // 기본값: hybrid (통합)
+let lastSearchResults = [];  // 마지막 검색 결과 (UPDATE용)
 
 // 모드 설정 함수 (제거 - HTML에서 직접 select 사용)
 // Event Listeners
@@ -54,6 +58,59 @@ window.addEventListener('click', (e) => {
 });
 
 confirmSaveBtn.addEventListener('click', confirmSave);
+
+// 저장 모드 전환
+saveMode.addEventListener('change', () => {
+    if (saveMode.value === 'update') {
+        existingDocSelector.style.display = 'block';
+        populateExistingDocs();
+    } else {
+        existingDocSelector.style.display = 'none';
+    }
+});
+
+// 기존 문서 선택 시 내용 로드
+existingDocList.addEventListener('change', loadExistingDoc);
+
+/**
+ * 기존 문서 목록 채우기
+ */
+function populateExistingDocs() {
+    existingDocList.innerHTML = '<option value="">-- 문서를 선택하세요 --</option>';
+    
+    if (lastSearchResults.length === 0) {
+        existingDocList.innerHTML += '<option value="">먼저 검색을 실행해주세요</option>';
+        return;
+    }
+    
+    lastSearchResults.forEach(doc => {
+        const option = document.createElement('option');
+        option.value = JSON.stringify(doc);  // doc 객체 전체 저장
+        option.textContent = `${doc.title} (${doc.collection})`;
+        existingDocList.appendChild(option);
+    });
+}
+
+/**
+ * 기존 문서 로드
+ */
+function loadExistingDoc() {
+    if (!existingDocList.value) return;
+    
+    const doc = JSON.parse(existingDocList.value);
+    saveTitle.value = doc.title;
+    saveCategory.value = doc.category || '기타';
+    saveContent.value = doc.preview;  // 미리보기만 있으므로 전체 조회 필요 시 추가
+    
+    // 컬렉션 설정
+    if (doc.collection === 'hino_raw') {
+        saveCollection.value = 'hino_raw';
+    } else if (doc.collection === 'hino_draft') {
+        saveCollection.value = 'hino_draft';
+    } else {
+        saveCollection.value = 'hino_final';
+    }
+}
 
 /**
  * 메시지 전송
@@ -154,6 +211,9 @@ function displayAIResponse(data) {
 
     // 문서 리스트 표시 (READ 명령 시)
     if (data.document_list && data.document_list.length > 0) {
+        // UPDATE용 검색 결과 저장
+        lastSearchResults = data.document_list;
+        
         content += `
             <div class="document-list-panel" style="margin: 15px 0; background: #f8f9fa; padding: 15px; border-radius: 8px;">
                 <strong>📄 문서 리스트 (${data.document_list.length}개):</strong>
@@ -378,6 +438,7 @@ async function confirmSave() {
     const category = saveCategory.value;
     const content = saveContent.value.trim();
     const collection = saveCollection.value;
+    const mode = saveMode.value;  // create or update
 
     if (!title || !content) {
         alert('제목과 내용을 입력해주세요.');
@@ -385,26 +446,50 @@ async function confirmSave() {
     }
 
     try {
+        const payload = {
+            title: title,
+            category: category,
+            content: content,
+            collection: collection,
+            original_message: currentResponseToSave.userMessage,
+            ai_response: currentResponseToSave.response
+        };
+
+        // UPDATE 모드: doc_id와 source_collection 추가
+        if (mode === 'update' && existingDocList.value) {
+            const doc = JSON.parse(existingDocList.value);
+            payload.doc_id = doc.doc_id;
+            payload.source_collection = doc.collection;
+        }
+
         const response = await fetch('/api/v1/save-summary/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                title: title,
-                category: category,
-                content: content,
-                collection: collection,
-                original_message: currentResponseToSave.userMessage,
-                ai_response: currentResponseToSave.response
-            })
+            body: JSON.stringify(payload)
         });
 
         const data = await response.json();
 
         if (data.status === 'success') {
-            alert(`✅ ${collection}에 저장되었습니다!\nDoc ID: ${data.doc_id}`);
+            const action = data.action || 'CREATE';
+            let message = '';
+            
+            if (action === 'CREATE') {
+                message = `✅ ${collection}에 저장되었습니다!\nDoc ID: ${data.doc_id}`;
+            } else if (action === 'UPDATE') {
+                message = `✅ ${collection}의 문서가 수정되었습니다!\nDoc ID: ${data.doc_id}`;
+            } else if (action === 'MOVE') {
+                message = `✅ ${data.source_collection} → ${data.target_collection}로 이동되었습니다!\nDoc ID: ${data.doc_id}`;
+            }
+            
+            alert(message);
             saveModal.style.display = 'none';
+            
+            // 폼 초기화
+            saveMode.value = 'create';
+            existingDocSelector.style.display = 'none';
         } else {
             alert('❌ 저장 실패: ' + (data.message || '알 수 없는 오류'));
         }

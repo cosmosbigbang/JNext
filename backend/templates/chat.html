@@ -427,8 +427,21 @@
                 <label>제목:</label>
                 <input type="text" id="save-title" placeholder="예: 하이노밸런스 핵심 정리">
             </div>
-            <div class="form-group">
-                <label>카테고리:</label>
+            <div class="form-group">                <label>모드:</label>
+                <select id="save-mode">
+                    <option value="create">🆕 새 문서 작성</option>
+                    <option value="update">✏️ 기존 문서 수정</option>
+                </select>
+            </div>
+            <div id="existing-doc-selector" style="display: none;">
+                <div class="form-group">
+                    <label>수정할 문서 (먼저 검색해주세요):</label>
+                    <select id="existing-doc-list">
+                        <option value="">-- 문서를 선택하세요 --</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">                <label>카테고리:</label>
                 <select id="save-category">
                     <option value="하이노이론">하이노이론</option>
                     <option value="하이노워킹">하이노워킹</option>
