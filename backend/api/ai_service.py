@@ -60,185 +60,95 @@ def validate_ai_response(response):
 
 def classify_intent(user_message):
     """
-    J님의 메시지에서 의도(Intent) 감지
-    Phase 6: 자동 CRUD
+    J님의 의도(Intent) 감지
+    설계 철학: CRUD 명령어는 "해"로 끝남, 나머지는 자연어 처리
+    
+    CRUD 명령어:
+    - 저장해, 검색해, 수정해, 삭제해
+    
+    나머지:
+    - 모두 ORGANIZE (자연어 처리)
     
     Returns:
         dict: {
-            'intent': 'SAVE' | 'READ' | 'UPDATE' | 'DELETE' | 'NONE',
-            'confidence': 0.0~1.0,
+            'intent': 'SAVE' | 'READ' | 'UPDATE' | 'DELETE' | 'ORGANIZE',
+            'confidence': 0.95,
             'params': {...}
         }
     """
-    message_lower = user_message.lower()
+    message = user_message.strip()
+    message_lower = message.lower()
     
-    # SAVE 의도 (명령형만 인식, 계획/미래형/조건부 제외)
-    save_keywords = ['저장해', '저장해줘', '기록해', '보관해']
-    # 제외: '저장하자', '저장할게', '저장할까' 등 계획/제안형
-    save_excludes = ['저장하자', '저장할게', '저장할까', '저장하면', '저장되면', 
-                     '먼저', '보여주고', '승인', '확인', '검토']
-    
-    if any(keyword in message_lower for keyword in save_keywords) and \
-       not any(keyword in message_lower for keyword in save_excludes):
-        params = {
-            'collection': 'hino_final' if any(k in message_lower for k in ['최종', 'final', '완료']) else 'hino_draft',
-            'target': 'last_response'
-        }
-        return {
-            'intent': 'SAVE',
-            'confidence': 0.9,
-            'params': params
-        }
-    
-    # READ 의도 (데이터 조회 - 명확한 명령어만)
-    read_keywords = ['검색해', '가져와', '보여줘', '조회해', 'read', 'show', '찾아줘', '목록']
-    # 일반 명사/동사는 제외 (자연어 대화용)
-    exclude_keywords = ['알려', '설명', '분석', '어때', '뭐야', '무엇', '정리', '백업']
-    
-    if any(keyword in message_lower for keyword in read_keywords) and \
-       not any(keyword in message_lower for keyword in exclude_keywords):
-        params = {'collections': []}
+    # CRUD 명령어 매핑 (해로 끝남)
+    CRUD_COMMANDS = {
+        '저장해': 'SAVE',
+        '저장해줘': 'SAVE',
+        '기록해': 'SAVE',
+        '보관해': 'SAVE',
         
-        # 컬렉션 필터링
-        if 'draft' in message_lower or '초안' in message_lower:
-            params['collections'].append('hino_draft')
-        if 'final' in message_lower or '최종' in message_lower:
-            params['collections'].append('hino_final')
-        if 'raw' in message_lower or '원본' in message_lower:
-            params['collections'].append('hino_raw')
+        '검색해': 'READ',
+        '검색해줘': 'READ',
+        '가져와': 'READ',
+        '가져와줘': 'READ',
+        '찾아줘': 'READ',
+        '조회해': 'READ',
         
-        # 카테고리 필터링
-        categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본']
-        for category in categories:
-            if category in user_message:
-                params['category'] = category
-                break
+        '수정해': 'UPDATE',
+        '수정해줘': 'UPDATE',
+        '고쳐': 'UPDATE',
+        '고쳐줘': 'UPDATE',
+        '바꿔': 'UPDATE',
+        '바꿔줘': 'UPDATE',
+        '변경해': 'UPDATE',
         
-        return {
-            'intent': 'READ',
-            'confidence': 0.85,
-            'params': params
-        }
+        '삭제해': 'DELETE',
+        '삭제해줘': 'DELETE',
+        '지워': 'DELETE',
+        '지워줘': 'DELETE',
+        '제거해': 'DELETE',
+    }
     
-    # DELETE 의도
-    delete_keywords = ['삭제', 'delete', '지워', '삭제해', '제거']
-    if any(keyword in message_lower for keyword in delete_keywords):
-        return {
-            'intent': 'DELETE',
-            'confidence': 0.9,
-            'params': {'requires_approval': True}
-        }
+    # CRUD 명령어 체크
+    for command, intent in CRUD_COMMANDS.items():
+        if command in message_lower:
+            params = {}
+            
+            # SAVE 파라미터
+            if intent == 'SAVE':
+                params['collection'] = 'hino_final' if any(k in message_lower for k in ['최종', 'final', '완료']) else 'hino_draft'
+                params['target'] = 'last_response'
+            
+            # READ 파라미터
+            elif intent == 'READ':
+                params['collections'] = []
+                if 'draft' in message_lower or '초안' in message_lower:
+                    params['collections'].append('hino_draft')
+                if 'final' in message_lower or '최종' in message_lower:
+                    params['collections'].append('hino_final')
+                if 'raw' in message_lower or '원본' in message_lower:
+                    params['collections'].append('hino_raw')
+                
+                # 카테고리 필터링
+                categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본']
+                for category in categories:
+                    if category in message:
+                        params['category'] = category
+                        break
+            
+            # UPDATE/DELETE 파라미터
+            elif intent in ['UPDATE', 'DELETE']:
+                params['requires_approval'] = True
+            
+            return {
+                'intent': intent,
+                'confidence': 0.95,
+                'params': params
+            }
     
-    # UPDATE 의도 (명령형만 인식: "수정해", "고쳐줘")
-    update_commands = ['수정해', '수정해줘', '고쳐', '고쳐줘', '바꿔', '바꿔줘', '변경해']
-    # 확인/조회는 제외
-    update_excludes = ['수정한', '수정된', '수정 내용', '수정내용', 
-                       '분석', '보고', '추가할', '있는지', '확인', '비교', 
-                       '보여', '먼저', '미리', '보여주', '보여달', '맞냐', '맞나']
-    
-    has_update_command = any(cmd in message_lower for cmd in update_commands)
-    has_exclude = any(exc in message_lower for exc in update_excludes)
-    
-    if has_update_command and not has_exclude:
-        # "수정해" 명령형만 UPDATE
-        return {
-            'intent': 'UPDATE',
-            'confidence': 0.85,
-            'params': {'requires_approval': True}
-        }
-    
-    # ORGANIZE_AND_SAVE 의도 (정리 후 저장)
-    organize_save_patterns = [
-        '정리해서 저장',
-        '정리하고 저장',
-        '합쳐서 저장',
-        '통합해서 저장',
-        '정리 저장',
-    ]
-    
-    if any(pattern in message_lower for pattern in organize_save_patterns):
-        params = {'collection': None}
-        
-        # 저장 위치 감지
-        if 'raw' in message_lower or '원본' in message_lower:
-            params['collection'] = 'hino_raw'
-        elif 'draft' in message_lower or '초안' in message_lower:
-            params['collection'] = 'hino_draft'
-        elif 'final' in message_lower or '최종' in message_lower:
-            params['collection'] = 'hino_final'
-        else:
-            params['collection'] = 'hino_draft'  # 기본값
-        
-        return {
-            'intent': 'ORGANIZE_AND_SAVE',
-            'confidence': 0.95,
-            'params': params
-        }
-    
-    # ORGANIZE 의도 (정리만)
-    organize_patterns = ['정리해', '합쳐', '통합해', '요약해', '분석해', '비교해', '보고', '검토']
-    
-    if any(pattern in message_lower for pattern in organize_patterns):
-        return {
-            'intent': 'ORGANIZE',
-            'confidence': 0.9,
-            'params': {}
-        }
-    
-    # GENERATE_FINAL 의도 (최종본 생성/정리)
-    generate_keywords = ['최종본', '종합해', '만들어']
-    if any(keyword in message_lower for keyword in generate_keywords):
-        params = {
-            'mode': 'final' if '최종' in message_lower else 'draft',
-            'category': None,
-            'exercise_name': None,
-            'include_keywords': [],
-            'exclude_keywords': []
-        }
-        
-        # 카테고리 감지
-        categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스']
-        for category in categories:
-            if category in user_message:
-                params['category'] = category
-                break
-        
-        # 운동명 감지 (카테고리 하위)
-        exercise_patterns = ['기본', '패스트', '슬로우', 'X', '주먹', '폭당폭당', '크로스']
-        for pattern in exercise_patterns:
-            if pattern in user_message and params['category']:
-                params['exercise_name'] = params['category'] + pattern
-        
-        # 포함/제외 키워드 추출
-        if '포함' in user_message or '넣어' in user_message:
-            # "기본, 패스트 포함" 형태 감지
-            import re
-            include_match = re.search(r'([\w\s,]+)\s*(포함|넣)', user_message)
-            if include_match:
-                keywords = include_match.group(1).replace(',', ' ').split()
-                params['include_keywords'] = keywords
-        
-        if '빼' in user_message or '제외' in user_message:
-            import re
-            exclude_match = re.search(r'([\w\s,]+)\s*(빼|제외)', user_message)
-            if exclude_match:
-                keywords = exclude_match.group(1).replace(',', ' ').split()
-                params['exclude_keywords'] = keywords
-        
-        # '전체' 키워드
-        if '전체' in message_lower:
-            params['all'] = True
-        
-        return {
-            'intent': 'GENERATE_FINAL',
-            'confidence': 0.9,
-            'params': params
-        }
-    
-    # NONE (일반 질문)
+    # CRUD 명령어 아님 → ORGANIZE (자연어 처리)
     return {
-        'intent': 'NONE',
-        'confidence': 1.0,
+        'intent': 'ORGANIZE',
+        'confidence': 0.95,
         'params': {}
     }
 
