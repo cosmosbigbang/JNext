@@ -45,6 +45,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
   String _mode = 'hybrid'; // 기본값: 통합 모드 (DB + 현재 분석)
+  String _model = 'gemini-flash'; // 기본값: 젠 (Gemini Flash)
 
   Future<void> _sendMessage() async {
     final message = _messageController.text.trim();
@@ -76,7 +77,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final response = await http.post(
         Uri.parse(_apiUrl),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'message': message, 'mode': _mode}),
+        body: jsonEncode({'message': message, 'mode': _mode, 'model': _model}),
       ).timeout(
         const Duration(seconds: 15),
         onTimeout: () {
@@ -167,14 +168,10 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(width: 12),
             // 3개 모드 선택 칩
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: _mode == 'organize' 
-                  ? Colors.blue.shade50 
-                  : _mode == 'hybrid' 
-                    ? Colors.green.shade50 
-                    : Colors.purple.shade50,
-                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: _mode == 'organize' 
                     ? Colors.blue.shade300 
@@ -187,9 +184,10 @@ class _ChatScreenState extends State<ChatScreen> {
               child: DropdownButton<String>(
                 value: _mode,
                 underline: Container(),
+                isDense: true,
                 icon: Icon(
                   Icons.arrow_drop_down,
-                  size: 16,
+                  size: 14,
                   color: _mode == 'organize' 
                     ? Colors.blue.shade700 
                     : _mode == 'hybrid' 
@@ -197,7 +195,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       : Colors.purple.shade700,
                 ),
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.bold,
                   color: _mode == 'organize' 
                     ? Colors.blue.shade700 
@@ -205,45 +203,69 @@ class _ChatScreenState extends State<ChatScreen> {
                       ? Colors.green.shade700 
                       : Colors.purple.shade700,
                 ),
-                items: [
+                items: const [
                   DropdownMenuItem(
                     value: 'organize',
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.storage, size: 14, color: Colors.blue.shade700),
-                        const SizedBox(width: 4),
-                        Text('DB', style: TextStyle(color: Colors.blue.shade700)),
-                      ],
-                    ),
+                    child: Text('DB', style: TextStyle(fontSize: 11)),
                   ),
                   DropdownMenuItem(
                     value: 'hybrid',
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.merge_type, size: 14, color: Colors.green.shade700),
-                        const SizedBox(width: 4),
-                        Text('통합', style: TextStyle(color: Colors.green.shade700)),
-                      ],
-                    ),
+                    child: Text('통합', style: TextStyle(fontSize: 11)),
                   ),
                   DropdownMenuItem(
                     value: 'analysis',
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.chat_bubble_outline, size: 14, color: Colors.purple.shade700),
-                        const SizedBox(width: 4),
-                        Text('대화', style: TextStyle(color: Colors.purple.shade700)),
-                      ],
-                    ),
+                    child: Text('대화', style: TextStyle(fontSize: 11)),
                   ),
                 ],
                 onChanged: (String? newValue) {
                   if (newValue != null) {
                     setState(() {
                       _mode = newValue;
+                    });
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            // AI 모델 선택
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.orange.shade300,
+                  width: 1.5,
+                ),
+              ),
+              child: DropdownButton<String>(
+                value: _model,
+                underline: Container(),
+                isDense: true,
+                icon: Icon(Icons.arrow_drop_down, size: 14, color: Colors.orange.shade700),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange.shade700,
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'gemini-flash',
+                    child: Text('젠', style: TextStyle(fontSize: 11)),
+                  ),
+                  DropdownMenuItem(
+                    value: 'gemini-pro',
+                    child: Text('젠시', style: TextStyle(fontSize: 11)),
+                  ),
+                  DropdownMenuItem(
+                    value: 'gpt',
+                    child: Text('진', style: TextStyle(fontSize: 11)),
+                  ),
+                ],
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _model = newValue;
                     });
                   }
                 },
