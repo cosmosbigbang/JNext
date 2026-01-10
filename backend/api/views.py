@@ -72,21 +72,6 @@ def search_firestore(collections=None, limit=50):
         dict: {collection_name: [documents]}
     """
     return FirestoreService.query_collections(collections, limit=limit)
-                doc_data['_id'] = doc.id
-                doc_data['_collection'] = collection_name
-                
-                # DatetimeWithNanoseconds를 ISO 문자열로 변환
-                for key, value in doc_data.items():
-                    if hasattr(value, 'isoformat'):
-                        doc_data[key] = value.isoformat()
-                
-                documents.append(doc_data)
-            
-            results[collection_name] = documents
-        except Exception as e:
-            results[collection_name] = {'error': str(e)}
-    
-    return results
 
 
 def chat_ui(request):
@@ -688,7 +673,7 @@ def chat(request):
     
     Body:
     {
-        "message": "사용자 메시지",
+        "message": "J님의 메시지",
         "mode": "organize" | "analysis"
     }
     """
