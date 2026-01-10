@@ -118,37 +118,81 @@ def classify_intent(user_message):
                 'params': {'requires_approval': True}
             }
     
-    # READ (유연: 자연어 허용)
-    read_patterns = [
-        '검색해', '검색해줘', '가져와', '가져와줘', '찾아줘', '조회해',
-        '보여줘', '보여주', '알려줘', '알려주',  # 자연어
-        '전체', '목록', '리스트', '내용',  # 문맥
-        '하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스'  # 카테고리
-    ]
+    # READ (목적어 검사: DB 관련만)
+    # DB 목적어: 카테고리, 컬렉션, DB 명시
+    db_targets = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스',
+                  'draft', '초안', 'final', '최종', 'raw', '원본', '전체', '목록', '리스트',
+                  'db', 'database', '데이터베이스', '디비']
     
-    if any(pattern in message_lower for pattern in read_patterns):
-        params = {'collections': []}
-        
-        # 컬렉션 필터링
-        if 'draft' in message_lower or '초안' in message_lower:
-            params['collections'].append('hino_draft')
-        if 'final' in message_lower or '최종' in message_lower:
-            params['collections'].append('hino_final')
-        if 'raw' in message_lower or '원본' in message_lower:
-            params['collections'].append('hino_raw')
-        
-        # 카테고리 필터링
-        categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스']
-        for category in categories:
-            if category in message:
-                params['category'] = category
-                break
-        
-        return {
-            'intent': 'READ',
-            'confidence': 0.95,
-            'params': params
-        }
+    # 외부 검색 목적어 (ORGANIZE로 처리)
+    external_targets = ['인터넷', '구글', 'google', '네이버', 'naver', '웹', 'web', '검색엔진']
+    
+    # 외부 검색 체크
+    if any(cmd in message_lower for cmd in ['검색해', '검색해줘', '찾아줘']):
+        # 외부 목적어 있으면 ORGANIZE
+        if any(ext in message_lower for ext in external_targets):
+            # "인터넷 검색해" → ORGANIZE (자연어)
+            pass  # 아래 ORGANIZE로 처리
+        # DB 목적어 있으면 READ
+        elif any(db in message_lower for db in db_targets):
+            # "하이노이론 검색해" → READ (DB 검색)
+            params = {'collections': []}
+            
+            # 컬렉션 필터링
+            if 'draft' in message_lower or '초안' in message_lower:
+                params['collections'].append('hino_draft')
+            if 'final' in message_lower or '최종' in message_lower:
+                params['collections'].append('hino_final')
+            if 'raw' in message_lower or '원본' in message_lower:
+                params['collections'].append('hino_raw')
+            
+            # 카테고리 필터링
+            categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스']
+            for category in categories:
+                if category in message:
+                    params['category'] = category
+                    break
+            
+            return {
+                'intent': 'READ',
+                'confidence': 0.95,
+                'params': params
+            }
+        # 목적어 없으면 → READ (기본 DB 검색)
+        else:
+            # "검색해" 단독 → READ (DB 검색)
+            return {
+                'intent': 'READ',
+                'confidence': 0.95,
+                'params': {'collections': []}
+            }
+    
+    # 기타 READ 패턴 (가져와, 보여줘, 조회해 등)
+    if any(pattern in message_lower for pattern in ['가져와', '가져와줘', '조회해', '보여줘', '보여주', '알려줘', '알려주']):
+        # DB 목적어 체크
+        if any(db in message_lower for db in db_targets):
+            params = {'collections': []}
+            
+            # 컬렉션 필터링
+            if 'draft' in message_lower or '초안' in message_lower:
+                params['collections'].append('hino_draft')
+            if 'final' in message_lower or '최종' in message_lower:
+                params['collections'].append('hino_final')
+            if 'raw' in message_lower or '원본' in message_lower:
+                params['collections'].append('hino_raw')
+            
+            # 카테고리 필터링
+            categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스']
+            for category in categories:
+                if category in message:
+                    params['category'] = category
+                    break
+            
+            return {
+                'intent': 'READ',
+                'confidence': 0.95,
+                'params': params
+            }
     
     # ORGANIZE (자연어 처리, DB 영향 없음)
     # "수정해서 보여달라" = AI가 수정안 생성 → 보여주기만
