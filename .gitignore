@@ -21,6 +21,10 @@ media/
 .env
 .env.local
 
+# 컨텍스트 백업 파일 (API 키 포함 가능성)
+CONTEXT_BACKUP*.md
+*_BACKUP*.md
+
 # Firebase 서비스 계정 키 (절대 커밋 금지!)
 *-service-account.json
 jnext-service-account.json
