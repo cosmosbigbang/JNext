@@ -62,18 +62,16 @@ def classify_intent(user_message):
     """
     J님의 의도(Intent) 감지
     
-    설계 철학:
-    1. 데이터 보호: CRUD 명령만 DB 영향
-    2. AI 자연어 이해: 제한 없이 활용
+    설계 철학 (J님):
+    1. "db" 목적어 = CRUD 활성화
+    2. "db" 없음 = ORGANIZE (안전)
     
-    CRUD (DB 영향):
-    - 저장해, 삭제해: 엄격 (단독 명령만)
-    - 수정해: 엄격 (단독 명령만, "수정해서" 제외)
-    - 검색/보여줘: 유연 (자연어 허용)
-    
-    ORGANIZE (DB 영향 없음):
-    - "수정해서 보여달라" = AI가 수정안 생성 → 보여주기
-    - "저장해" 명령 전까지 DB 안 건드림
+    핵심:
+    - "db 검색해" → READ (DB 조회)
+    - "db 분석해" → ORGANIZE (DB 읽기만)
+    - "db 수정해" → UPDATE (DB 수정)
+    - "db 삭제해" → DELETE (DB 삭제)
+    - "검색해" → ORGANIZE (자연어, DB 영향 없음)
     
     Returns:
         dict: {
@@ -85,7 +83,10 @@ def classify_intent(user_message):
     message = user_message.strip()
     message_lower = message.lower()
     
-    # SAVE (엄격: 단독 명령만)
+    # DB 목적어 체크 (CRUD 활성화)
+    has_db = any(db in message_lower for db in ['db', 'database', '데이터베이스', '디비'])
+    
+    # SAVE (엄격: "저장해"만, "db" 불필요)
     if any(cmd in message_lower for cmd in ['저장해', '저장해줘', '기록해', '보관해']):
         # 제외: "저장해서", "저장하고" 등
         if not any(exc in message_lower for exc in ['저장해서', '저장해도', '저장하고', '저장하면']):
@@ -99,8 +100,8 @@ def classify_intent(user_message):
                 'params': params
             }
     
-    # DELETE (엄격: 단독 명령만)
-    if any(cmd in message_lower for cmd in ['삭제해', '삭제해줘', '지워', '지워줘', '제거해']):
+    # DELETE (엄격: "db" 필수)
+    if has_db and any(cmd in message_lower for cmd in ['삭제해', '삭제해줘', '지워', '지워줘', '제거해']):
         if not any(exc in message_lower for exc in ['삭제해서', '삭제하고', '삭제하면']):
             return {
                 'intent': 'DELETE',
@@ -108,9 +109,9 @@ def classify_intent(user_message):
                 'params': {'requires_approval': True}
             }
     
-    # UPDATE (엄격: 단독 명령만, "수정해서" 제외)
-    if any(cmd in message_lower for cmd in ['수정해', '수정해줘', '고쳐', '고쳐줘', '바꿔', '바꿔줘', '변경해']):
-        # 제외: "수정해서 보여달라" = ORGANIZE (AI가 수정안 생성만)
+    # UPDATE (엄격: "db" 필수)
+    if has_db and any(cmd in message_lower for cmd in ['수정해', '수정해줘', '고쳐', '고쳐줘', '바꿔', '바꿔줘', '변경해']):
+        # 제외: "수정해서 보여달라" = ORGANIZE
         if not any(exc in message_lower for exc in ['수정해서', '수정해도', '수정하고', '수정하면']):
             return {
                 'intent': 'UPDATE',
@@ -118,66 +119,35 @@ def classify_intent(user_message):
                 'params': {'requires_approval': True}
             }
     
-    # READ (목적어 검사: DB 관련만)
-    # DB 목적어: 카테고리, 컬렉션, DB 명시
+    # READ (엄격: "db" 또는 카테고리 필수)
     db_targets = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스',
-                  'draft', '초안', 'final', '최종', 'raw', '원본', '전체', '목록', '리스트',
-                  'db', 'database', '데이터베이스', '디비']
+                  'draft', '초안', 'final', '최종', 'raw', '원본']
     
-    # 외부 검색 목적어 (ORGANIZE로 처리)
-    external_targets = ['인터넷', '구글', 'google', '네이버', 'naver', '웹', 'web', '검색엔진']
+    has_category = any(cat in message_lower for cat in db_targets)
     
-    # 외부 검색 체크
-    if any(cmd in message_lower for cmd in ['검색해', '검색해줘', '찾아줘']):
-        # 외부 목적어 있으면 ORGANIZE
-        if any(ext in message_lower for ext in external_targets):
-            # "인터넷 검색해" → ORGANIZE (자연어)
-            pass  # 아래 ORGANIZE로 처리
-        # DB 목적어 있으면 READ
-        elif any(db in message_lower for db in db_targets):
-            # "하이노이론 검색해" → READ (DB 검색)
-            params = {'collections': []}
-            
-            # 컬렉션 필터링
-            if 'draft' in message_lower or '초안' in message_lower:
-                params['collections'].append('hino_draft')
-            if 'final' in message_lower or '최종' in message_lower:
-                params['collections'].append('hino_final')
-            if 'raw' in message_lower or '원본' in message_lower:
-                params['collections'].append('hino_raw')
-            
-            # 카테고리 필터링
-            categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스']
-            for category in categories:
-                if category in message:
-                    params['category'] = category
-                    break
-            
-            return {
-                'intent': 'READ',
-                'confidence': 0.95,
-                'params': params
-            }
-        # 목적어 없으면 → READ (기본 DB 검색)
-        else:
-            # "검색해" 단독 → READ (DB 검색)
-            return {
-                'intent': 'READ',
-                'confidence': 0.95,
-                'params': {'collections': []}
-            }
-    
-    # 기타 READ 패턴 (가져와, 보여줘, 조회해 등)
-    if any(pattern in message_lower for pattern in ['가져와', '가져와줘', '조회해', '보여줘', '보여주', '알려줘', '알려주']):
-        # DB 목적어 체크
-        if any(db in message_lower for db in db_targets):
-            params = {'collections': []}
-            
-            # 컬렉션 필터링
-            if 'draft' in message_lower or '초안' in message_lower:
-                params['collections'].append('hino_draft')
-            if 'final' in message_lower or '최종' in message_lower:
-                params['collections'].append('hino_final')
+    if (has_db or has_category) and any(cmd in message_lower for cmd in ['검색해', '검색해줘', '찾아줘', '가져와', '가져와줘', '조회해', '보여줘', '보여주']):
+        params = {'collections': []}
+        
+        # 컬렉션 필터링
+        if 'draft' in message_lower or '초안' in message_lower:
+            params['collections'].append('hino_draft')
+        if 'final' in message_lower or '최종' in message_lower:
+            params['collections'].append('hino_final')
+        if 'raw' in message_lower or '원본' in message_lower:
+            params['collections'].append('hino_raw')
+        
+        # 카테고리 필터링
+        categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스']
+        for category in categories:
+            if category in message:
+                params['category'] = category
+                break
+        
+        return {
+            'intent': 'READ',
+            'confidence': 0.95,
+            'params': params
+        }
             if 'raw' in message_lower or '원본' in message_lower:
                 params['collections'].append('hino_raw')
             
