@@ -72,9 +72,13 @@ def classify_intent(user_message):
     """
     message_lower = user_message.lower()
     
-    # SAVE 의도
-    save_keywords = ['저장', 'save', '저장해', '저장해줘', '기록', '보관']
-    if any(keyword in message_lower for keyword in save_keywords):
+    # SAVE 의도 (명령형만 인식, 계획/미래형 제외)
+    save_keywords = ['저장해', '저장해줘', '기록해', '보관해']
+    # 제외: '저장하자', '저장할게', '저장할까' 등 계획/제안형
+    save_excludes = ['저장하자', '저장할게', '저장할까', '저장하면', '저장되면']
+    
+    if any(keyword in message_lower for keyword in save_keywords) and \
+       not any(keyword in message_lower for keyword in save_excludes):
         params = {
             'collection': 'hino_final' if any(k in message_lower for k in ['최종', 'final', '완료']) else 'hino_draft',
             'target': 'last_response'
