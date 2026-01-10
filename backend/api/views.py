@@ -1282,13 +1282,22 @@ def save_summary(request):
         
         # Firestore에 저장
         db = firestore.client()
+        
+        # 데이터 상태 결정
+        if collection == 'hino_raw':
+            data_state = 'RAW'
+        elif collection == 'hino_draft':
+            data_state = 'DRAFT'
+        else:  # hino_final
+            data_state = 'FINAL'
+        
         doc_data = {
             '제목': title,
             '카테고리': category,
             '내용': content,
             '원본질문': original_message,
             'AI응답': ai_response,
-            '데이터상태': 'DRAFT' if collection == 'hino_draft' else 'FINAL',
+            '데이터상태': data_state,
             '작성일시': now_kst(),
             '수정일시': now_kst(),
             '작성자': 'J님',
