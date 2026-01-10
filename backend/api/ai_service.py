@@ -172,7 +172,7 @@ def classify_intent(user_message):
         }
     
     # ORGANIZE 의도 (정리만)
-    organize_patterns = ['정리해', '합쳐', '통합해', '요약해']
+    organize_patterns = ['정리해', '합쳐', '통합해', '요약해', '분석해', '비교해', '보고', '검토']
     
     if any(pattern in message_lower for pattern in organize_patterns):
         return {
