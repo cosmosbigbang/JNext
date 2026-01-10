@@ -901,6 +901,115 @@ def chat(request):
                 }
             })
         
+        # ORGANIZE 의도 처리 (문서 정리)
+        if intent == 'ORGANIZE':
+            params = intent_data['params']
+            auto_save = params.get('auto_save', False)
+            target_collection = params.get('collection', 'hino_draft')
+            
+            # AI에게 정리 요청
+            organize_prompt = f"""
+J님이 제공한 내용을 정리해서 Firestore에 저장할 수 있는 형태로 구조화해주세요.
+
+**J님의 요청:**
+{user_message}
+
+**작업:**
+1. 제공된 텍스트를 분석하고 핵심 내용 정리
+2. 아래 JSON 형식에 맞춰 필드 채우기
+3. 제목, 카테고리, 내용을 명확하게 작성
+
+**출력 JSON 형식:**
+{{
+    "제목": "문서 제목 (30자 이내)",
+    "카테고리": "하이노이론|하이노워킹|하이노스케이팅|하이노철봉|하이노기본|기타",
+    "내용": "마크다운 형식의 전체 정리 내용",
+    "운동명": "해당되는 경우만 입력",
+    "태그": ["키워드1", "키워드2"],
+    "요약": "한 문장 요약"
+}}
+
+반드시 위 JSON 형식만 출력하세요.
+"""
+            
+            try:
+                # AI 모델 호출
+                ai_response = call_ai_model(
+                    model_name=model,
+                    user_message=organize_prompt,
+                    system_prompt="당신은 하이노밸런스 이론 정리 전문가입니다. JSON 형식으로만 응답하세요.",
+                    db_context={}
+                )
+                
+                # JSON 파싱
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', ai_response.get('answer', ''))
+                if json_match:
+                    organized_data = json.loads(json_match.group(0))
+                else:
+                    raise ValueError("JSON 형식을 찾을 수 없습니다.")
+                
+                # 자동 저장 모드
+                if auto_save:
+                    db = firestore.client()
+                    doc_data = {
+                        '제목': organized_data.get('제목', '정리 문서'),
+                        '카테고리': organized_data.get('카테고리', '기타'),
+                        '내용': organized_data.get('내용', ''),
+                        '운동명': organized_data.get('운동명', ''),
+                        '태그': organized_data.get('태그', []),
+                        '요약': organized_data.get('요약', ''),
+                        '작성일시': now_kst(),
+                        '작성자': 'J님',
+                        '소스': f'{model} 정리'
+                    }
+                    
+                    doc_ref = db.collection(target_collection).add(doc_data)
+                    doc_id = doc_ref[1].id
+                    
+                    return JsonResponse({
+                        'status': 'success',
+                        'action': 'ORGANIZE_AND_SAVE',
+                        'message': f'✅ 정리 완료 및 {target_collection}에 저장했습니다.',
+                        'document_id': doc_id,
+                        'organized_data': organized_data,
+                        'response': {
+                            'answer': f"문서를 정리해서 {target_collection}에 저장했습니다.\n\n제목: {organized_data.get('제목')}",
+                            'claims': [f"카테고리: {organized_data.get('카테고리')}", f"요약: {organized_data.get('요약')}"],
+                            'evidence': [],
+                            'missing_info': [],
+                            'confidence': 0.95
+                        }
+                    })
+                else:
+                    # 정리 결과만 보여주기
+                    return JsonResponse({
+                        'status': 'success',
+                        'action': 'ORGANIZE',
+                        'message': '✅ 문서를 정리했습니다. 저장하려면 "저장해줘"라고 말씀해주세요.',
+                        'organized_data': organized_data,
+                        'response': {
+                            'answer': f"정리 완료:\n\n**제목:** {organized_data.get('제목')}\n**카테고리:** {organized_data.get('카테고리')}\n**요약:** {organized_data.get('요약')}\n\n{organized_data.get('내용', '')[:500]}...",
+                            'claims': [f"총 {len(organized_data.get('내용', ''))}자"],
+                            'evidence': [],
+                            'missing_info': ['저장하려면 "draft에 저장해줘" 명령 필요'],
+                            'confidence': 0.9
+                        }
+                    })
+                    
+            except Exception as e:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'❌ 정리 중 오류: {str(e)}',
+                    'response': {
+                        'answer': f'정리 실패: {str(e)}',
+                        'claims': [],
+                        'evidence': [],
+                        'missing_info': [],
+                        'confidence': 0.0
+                    }
+                }, status=500)
+        
         # GENERATE_FINAL 의도 처리 (자연어 방식)
         if intent == 'GENERATE_FINAL':
             params = intent_data['params']
