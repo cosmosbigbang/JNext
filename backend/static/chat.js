@@ -639,10 +639,20 @@ function showEditModal(doc) {
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #555;">데이터 상태:</label>
                     <select id="edit-데이터상태" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                        <option value="RAW" ${(doc.데이터상태 || doc.데이터상태) === 'RAW' ? 'selected' : ''}>RAW (원본)</option>
                         <option value="DRAFT" ${(doc.데이터상태 || doc.데이터상태) === 'DRAFT' ? 'selected' : ''}>DRAFT (초안)</option>
                         <option value="FINAL" ${(doc.데이터상태 || doc.데이터상태) === 'FINAL' ? 'selected' : ''}>FINAL (최종)</option>
-                        <option value="RAW" ${(doc.데이터상태 || doc.데이터상킬) === 'RAW' ? 'selected' : ''}>RAW (원본)</option>
                     </select>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #555;">저장 위치 (컬렉션):</label>
+                    <select id="edit-컬렉션" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                        <option value="hino_raw" ${(doc.collection || doc._collection) === 'hino_raw' ? 'selected' : ''}>💭 Raw (아이디어)</option>
+                        <option value="hino_draft" ${(doc.collection || doc._collection) === 'hino_draft' ? 'selected' : ''}>📝 Draft (초안)</option>
+                        <option value="hino_final" ${(doc.collection || doc._collection) === 'hino_final' ? 'selected' : ''}>✅ Final (최종)</option>
+                    </select>
+                    <small style="color: #666;">⚠️ 컬렉션을 변경하면 문서가 이동됩니다.</small>
                 </div>
                 
                 <!-- 동적 필드 -->
@@ -698,10 +708,11 @@ function closeEditModal(event) {
 /**
  * 문서 수정 제출
  */
-function submitEdit(collection, doc_id, dynamicFields = []) {
-    console.log('submitEdit called:', { collection, doc_id, dynamicFields });
+function submitEdit(sourceCollection, doc_id, dynamicFields = []) {
+    console.log('submitEdit called:', { sourceCollection, doc_id, dynamicFields });
     
     try {
+        const targetCollection = document.getElementById('edit-컬렉션').value;
         const updates = {
             '제목': document.getElementById('edit-제목').value.trim(),
             '카테고리': document.getElementById('edit-카테고리').value,
@@ -724,34 +735,71 @@ function submitEdit(collection, doc_id, dynamicFields = []) {
         
         console.log('All updates:', updates);
         
-        fetch('/api/v1/update-documents/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                documents: [{ collection, doc_id }],
-                updates: updates
+        // 컬렉션 이동 시 save-summary API 사용
+        if (sourceCollection !== targetCollection) {
+            console.log('컬렉션 이동:', sourceCollection, '→', targetCollection);
+            
+            fetch('/api/v1/save-summary/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    doc_id: doc_id,
+                    source_collection: sourceCollection,
+                    collection: targetCollection,
+                    title: updates['제목'],
+                    category: updates['카테고리'],
+                    content: updates['내용'],
+                    original_message: '',
+                    ai_response: {}
+                })
             })
-        })
-        .then(response => {
-            console.log('Response status:', response.status);
-            return response.json();
-        })
-        .then(data => {
-            console.log('Response data:', data);
-            if (data.status === 'success') {
-                alert('✅ 문서가 수정되었습니다.');
-                closeEditModal();
-                location.reload();
-            } else {
-                alert('❌ 수정 실패: ' + (data.message || '알 수 없는 오류'));
-            }
-        })
-        .catch(error => {
-            console.error('Update error:', error);
-            alert('❌ 수정 중 오류 발생: ' + error.message);
-        });
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert(`✅ ${sourceCollection} → ${targetCollection}로 이동되었습니다!`);
+                    closeEditModal();
+                    location.reload();
+                } else {
+                    alert('❌ 이동 실패: ' + (data.message || '알 수 없는 오류'));
+                }
+            })
+            .catch(error => {
+                console.error('Move error:', error);
+                alert('❌ 이동 중 오류 발생: ' + error.message);
+            });
+        } else {
+            // 같은 컬렉션 내 수정
+            fetch('/api/v1/update-documents/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    documents: [{ collection: sourceCollection, doc_id }],
+                    updates: updates
+                })
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.status === 'success') {
+                    alert('✅ 문서가 수정되었습니다.');
+                    closeEditModal();
+                    location.reload();
+                } else {
+                    alert('❌ 수정 실패: ' + (data.message || '알 수 없는 오류'));
+                }
+            })
+            .catch(error => {
+                console.error('Update error:', error);
+                alert('❌ 수정 중 오류 발생: ' + error.message);
+            });
+        }
     } catch (error) {
         console.error('submitEdit error:', error);
         alert('❌ 에러: ' + error.message);
