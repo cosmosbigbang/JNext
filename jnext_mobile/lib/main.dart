@@ -62,11 +62,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _messageController.clear();
     
-    // 스크롤을 맨 아래로
+    // 스크롤을 적정 위치로 (입력창 가리지 않음)
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          _scrollController.position.maxScrollExtent - 80,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -108,11 +108,11 @@ class _ChatScreenState extends State<ChatScreen> {
           _isLoading = false;
         });
         
-        // 스크롤을 맨 아래로
+        // 스크롤을 적정 위치로 (입력창 가리지 않음)
         Future.delayed(const Duration(milliseconds: 100), () {
           if (_scrollController.hasClients) {
             _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
+              _scrollController.position.maxScrollExtent - 80,
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
             );
