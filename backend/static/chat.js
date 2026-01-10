@@ -199,34 +199,31 @@ function displayAIResponse(data) {
         `;
     }
 
-    // Claims 표시
+    // Claims 표시 (전체)
     if (response.claims && response.claims.length > 0) {
         content += `
             <div class="evidence-panel">
                 <strong>📌 핵심 주장 (${response.claims.length}개):</strong>
                 <ul class="claims-list">
-                    ${response.claims.slice(0, 5).map(claim => 
+                    ${response.claims.map(claim => 
                         `<li class="claim-item">${claim}</li>`
                     ).join('')}
-                    ${response.claims.length > 5 ? `<li>...외 ${response.claims.length - 5}개</li>` : ''}
                 </ul>
             </div>
         `;
     }
 
-    // Evidence 표시
+    // Evidence 표시 (전체)
     if (response.evidence && response.evidence.length > 0) {
         content += `
             <div class="evidence-panel" style="margin-top: 10px;">
                 <strong>🔍 근거 (${response.evidence.length}개):</strong>
-                ${response.evidence.slice(0, 3).map(ev => `
+                ${response.evidence.map(ev => `
                     <div class="evidence-item">
                         📁 ${ev.collection}/${ev.doc_id}<br>
                         📝 ${ev.field}: "${ev.value}"
                     </div>
                 `).join('')}
-                ${response.evidence.length > 3 ? 
-                    `<div style="margin-top: 5px; color: #666;">...외 ${response.evidence.length - 3}개 근거</div>` : ''}
             </div>
         `;
     }
