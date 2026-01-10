@@ -735,30 +735,14 @@ def chat(request):
                 'message': 'mode는 "organize", "hybrid" 또는 "analysis"만 가능합니다.'
             }, status=400)
         
-        # DB 데이터 조회 (Intent 처리 전에 준비)
-        db_data = search_firestore()
-        db_context = "\n=== 현재 Firestore DB 데이터 ===\n"
-        total_docs = 0
-        
-        for collection_name, documents in db_data.items():
-            if isinstance(documents, list):
-                doc_count = len(documents)
-                total_docs += doc_count
-                db_context += f"\n## {collection_name} ({doc_count}개 문서)\n"
-                
-                if doc_count > 0:
-                    for idx, doc in enumerate(documents[:10], 1):
-                        db_context += f"\n### 문서 {idx} (ID: {doc.get('_id', 'unknown')})\n"
-                        db_context += f"```json\n{json.dumps(doc, ensure_ascii=False, indent=2)}\n```\n"
-                else:
-                    db_context += "- 데이터 없음\n"
-        
-        db_context += f"\n=== 총 {total_docs}개 문서 조회됨 ===\n"
-        
         # Phase 6: 의도 분류
         global last_ai_response, last_user_message
         intent_data = classify_intent(user_message)
         intent = intent_data['intent']
+        
+        # db_context 초기화 (모든 Intent에서 사용, analysis 모드는 빈 문자열)
+        db_context = "" if mode == 'analysis' else ""
+        total_docs = 0
         
         # SAVE 의도 처리
         if intent == 'SAVE':
@@ -936,12 +920,35 @@ def chat(request):
         
         # ORGANIZE 의도 처리 (정리만 - 자연어 자유 대화)
         if intent == 'ORGANIZE':
+            # DB 조회 (organize/hybrid 모드일 때만)
+            if mode in ['organize', 'hybrid']:
+                db_data = search_firestore()
+                db_context = "\n=== 현재 Firestore DB 데이터 ===\n"
+                total_docs = 0
+                
+                for collection_name, documents in db_data.items():
+                    if isinstance(documents, list):
+                        doc_count = len(documents)
+                        total_docs += doc_count
+                        db_context += f"\n## {collection_name} ({doc_count}개 문서)\n"
+                        
+                        if doc_count > 0:
+                            for idx, doc in enumerate(documents[:3], 1):  # 3개로 제한
+                                db_context += f"\n### 문서 {idx}\n"
+                                db_context += f"제목: {doc.get('제목', 'N/A')}\n"
+                                db_context += f"카테고리: {doc.get('카테고리', 'N/A')}\n"
+                                db_context += f"내용: {doc.get('내용', '')[:200]}...\n"
+                        else:
+                            db_context += "- 데이터 없음\n"
+                
+                db_context += f"\n=== 총 {total_docs}개 문서 ===\n"
+            
             # 자연어 그대로 AI에게 전달 (JSON 강제 안함)
             ai_response = call_ai_model(
                 model_name=model,
                 user_message=user_message,
                 system_prompt=system_prompt,  # 모드별 프롬프트 사용
-                db_context=db_context if mode in ['organize', 'hybrid'] else {},
+                db_context=db_context,
                 mode=mode
             )
             
@@ -958,12 +965,35 @@ def chat(request):
             params = intent_data['params']
             target_collection = params.get('collection', 'hino_draft')
             
+            # DB 조회 (organize/hybrid 모드일 때만)
+            if mode in ['organize', 'hybrid']:
+                db_data = search_firestore()
+                db_context = "\n=== 현재 Firestore DB 데이터 ===\n"
+                total_docs = 0
+                
+                for collection_name, documents in db_data.items():
+                    if isinstance(documents, list):
+                        doc_count = len(documents)
+                        total_docs += doc_count
+                        db_context += f"\n## {collection_name} ({doc_count}개 문서)\n"
+                        
+                        if doc_count > 0:
+                            for idx, doc in enumerate(documents[:3], 1):  # 3개로 제한
+                                db_context += f"\n### 문서 {idx}\n"
+                                db_context += f"제목: {doc.get('제목', 'N/A')}\n"
+                                db_context += f"카테고리: {doc.get('카테고리', 'N/A')}\n"
+                                db_context += f"내용: {doc.get('내용', '')[:200]}...\n"
+                        else:
+                            db_context += "- 데이터 없음\n"
+                
+                db_context += f"\n=== 총 {total_docs}개 문서 ===\n"
+            
             # 1단계: 자연어로 자유롭게 정리
             ai_response = call_ai_model(
                 model_name=model,
                 user_message=user_message,
                 system_prompt=system_prompt,
-                db_context=db_context if mode in ['organize', 'hybrid'] else {},
+                db_context=db_context,
                 mode=mode
             )
             
