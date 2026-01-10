@@ -760,8 +760,12 @@ def chat(request):
                             db_context += f"\n### 문서 {idx}\n"
                             db_context += f"제목: {doc.get('제목', 'N/A')}\n"
                             db_context += f"카테고리: {doc.get('카테고리', 'N/A')}\n"
+                            # 전체 내용 제공 (제한 없음)
                             content = doc.get('내용', '')
-                            db_context += f"내용: {content[:200]}...\n" if len(content) > 200 else f"내용: {content}\n"
+                            full_text = doc.get('전체글', '')
+                            db_context += f"내용: {content}\n"
+                            if full_text:
+                                db_context += f"전체글: {full_text}\n"
                     else:
                         db_context += "- 데이터 없음\n"
             

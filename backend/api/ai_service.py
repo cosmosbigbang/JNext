@@ -131,7 +131,8 @@ def classify_intent(user_message):
     
     # UPDATE 의도 (단, 분석/보고/보여주기 맥락이면 제외)
     update_keywords = ['수정', 'update', '고쳐', '바꿔', '변경']
-    analysis_context = ['분석', '보고', '추가할', '있는지', '확인', '비교', '보여', '먼저']
+    analysis_context = ['분석', '보고', '추가할', '있는지', '확인', '비교', 
+                         '보여', '먼저', '미리', '보여주', '보여달']
     
     has_update_keyword = any(keyword in message_lower for keyword in update_keywords)
     has_analysis_context = any(ctx in message_lower for ctx in analysis_context)
