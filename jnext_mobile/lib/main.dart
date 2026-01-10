@@ -309,6 +309,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   Expanded(
                     child: TextField(
                       controller: _messageController,
+                      maxLines: 5,
+                      minLines: 1,
+                      keyboardType: TextInputType.multiline,
                       decoration: InputDecoration(
                         hintText: '메시지를 입력하세요...',
                         filled: true,
@@ -329,7 +332,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                       onSubmitted: (_) => _sendMessage(),
-                      textInputAction: TextInputAction.send,
+                      textInputAction: TextInputAction.newline,
                     ),
                   ),
                   const SizedBox(width: 12),

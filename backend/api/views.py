@@ -925,20 +925,27 @@ def chat(request):
             # 결과 포맷팅
             total_docs = len(document_list)
             
-            return JsonResponse({
-                'status': 'success',
-                'action': 'READ',
-                'message': f'✅ {total_docs}개 문서를 찾았습니다.',
-                'data': db_data,
-                'document_list': document_list,  # 체크박스 UI용
-                'response': {
-                    'answer': f'{total_docs}개 문서를 조회했습니다.',
-                    'claims': [f'{k}: {len(v)}개' for k, v in db_data.items() if isinstance(v, list)],
-                    'evidence': [],
-                    'missing_info': [],
-                    'confidence': 1.0
-                }
-            })
+            # 검색 결과 없으면 ORGANIZE로 fallback
+            if total_docs == 0:
+                print(f"[READ Fallback] 검색 결과 없음 → ORGANIZE로 전환")
+                # ORGANIZE Intent로 재라우팅
+                intent = 'ORGANIZE'
+                # ORGANIZE 처리로 이동 (아래 코드에서 처리)
+            else:
+                return JsonResponse({
+                    'status': 'success',
+                    'action': 'READ',
+                    'message': f'✅ {total_docs}개 문서를 찾았습니다.',
+                    'data': db_data,
+                    'document_list': document_list,  # 체크박스 UI용
+                    'response': {
+                        'answer': f'{total_docs}개 문서를 조회했습니다.',
+                        'claims': [f'{k}: {len(v)}개' for k, v in db_data.items() if isinstance(v, list)],
+                        'evidence': [],
+                        'missing_info': [],
+                        'confidence': 1.0
+                    }
+                })
         
         # UPDATE 의도 처리 (문서 수정)
         if intent == 'UPDATE':

@@ -89,10 +89,10 @@ def classify_intent(user_message):
             'params': params
         }
     
-    # READ 의도 (데이터 조회 - 명확한 키워드만)
-    read_keywords = ['검색', '가져와', '보여줘', '조회', 'read', 'show', '찾아줘', '목록']
-    # '알려줘', '설명' 등은 제외 (AI 대화용)
-    exclude_keywords = ['알려', '설명', '분석', '어때', '뭐야', '무엇']
+    # READ 의도 (데이터 조회 - 명확한 명령어만)
+    read_keywords = ['검색해', '가져와', '보여줘', '조회해', 'read', 'show', '찾아줘', '목록']
+    # 일반 명사/동사는 제외 (자연어 대화용)
+    exclude_keywords = ['알려', '설명', '분석', '어때', '뭐야', '무엇', '정리', '백업']
     
     if any(keyword in message_lower for keyword in read_keywords) and \
        not any(keyword in message_lower for keyword in exclude_keywords):
