@@ -944,16 +944,57 @@ def chat(request):
         
         # UPDATE 의도 처리 (문서 수정)
         if intent == 'UPDATE':
+            if not last_ai_response:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': '수정할 내용이 없습니다. 먼저 "문서 검색" 후 수정 내용을 지시해주세요.'
+                }, status=400)
+            
+            # ⚠️ UPDATE도 SAVE처럼 모달창 방식으로 처리
+            # 마지막 AI 응답에서 수정할 내용 준비
+            title = f"{last_user_message[:30]}... (수정)" if last_user_message else "문서 수정"
+            
+            # AI 응답에서 전체글 추출 (통합안 등)
+            full_article = last_ai_response.get('answer', '')
+            
+            # formatResponseForSave 로직으로 요약 생성
+            content = f"# {last_ai_response.get('answer', '')}\n\n"
+            
+            if last_ai_response.get('claims'):
+                content += "## 핵심 주장\n"
+                for idx, claim in enumerate(last_ai_response['claims'], 1):
+                    content += f"{idx}. {claim}\n"
+                content += '\n'
+            
+            if last_ai_response.get('evidence'):
+                content += "## 근거 (원본 문서)\n"
+                for idx, ev in enumerate(last_ai_response['evidence'], 1):
+                    content += f"[{idx}] {ev.get('collection', '')}/{ev.get('doc_id', '')}\n"
+                    content += f"   {ev.get('field', '')}: {ev.get('value', '')}\n\n"
+            
+            # 수정 모달창용 데이터 반환
             return JsonResponse({
-                'status': 'info',
-                'action': 'UPDATE',
-                'message': '⚠️ 문서 수정 기능이 준비 중입니다. 현재는 다음과 같이 사용해주세요:\n1. "하이노밸런스 이론 검색" (문서 조회)\n2. 내용 확인 후 새로 작성\n3. "저장해줘" (새 버전 저장)',
+                'status': 'success',
+                'action': 'UPDATE',  # 모바일에서 수정 모달창 띄움
+                'message': '수정할 내용이 준비되었습니다. 수정창에서 확인하세요.',
+                'save_data': {  # 수정 모달창에 표시할 데이터
+                    'title': title,
+                    'category': '기타',
+                    'subcategory': '',
+                    'content': content,
+                    'full_article': full_article,
+                    'collection': 'hino_draft',  # 기본 컬렉션
+                    'original_question': last_user_message,
+                    'ai_response': last_ai_response,
+                    'is_update': True,  # UPDATE 모드 표시
+                    'source_docs': last_ai_response.get('evidence', [])  # 원본 문서들
+                },
                 'response': {
-                    'answer': '문서 수정 기능이 곧 추가됩니다. 임시로 검색 → 새 작성 → 저장 방식을 사용해주세요.',
-                    'claims': ['UPDATE Intent 감지됨', '승인 대기 중'],
-                    'evidence': [],
-                    'missing_info': ['수정할 문서 ID 또는 제목'],
-                    'confidence': 0.5
+                    'answer': '수정할 내용이 준비되었습니다. 수정창에서 제목, 카테고리, 내용을 확인하고 저장하세요.',
+                    'claims': ['제목: ' + title, '원본 문서: ' + str(len(last_ai_response.get('evidence', []))) + '개'],
+                    'evidence': last_ai_response.get('evidence', []),
+                    'missing_info': [],
+                    'confidence': 1.0
                 }
             })
         

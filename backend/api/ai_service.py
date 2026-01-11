@@ -86,8 +86,11 @@ def classify_intent(user_message):
     # DB 목적어 체크 (CRUD 활성화)
     has_db = any(db in message_lower for db in ['db', 'database', '데이터베이스', '디비'])
     
-    # SAVE (엄격: "저장해"만, "db" 불필요)
-    if any(cmd in message_lower for cmd in ['저장해', '저장해줘', '기록해', '보관해']):
+    # SAVE (엄격: "db" 필수!)
+    # ⚠️ J님 철학: "db" 목적어 없으면 모두 ORGANIZE
+    #   - "db에 저장해" → SAVE (CRUD)
+    #   - "저장해" → ORGANIZE (자연어, AI가 준비만 함)
+    if has_db and any(cmd in message_lower for cmd in ['저장해', '저장해줘', '기록해', '보관해']):
         # 제외: "저장해서", "저장하고" 등
         if not any(exc in message_lower for exc in ['저장해서', '저장해도', '저장하고', '저장하면']):
             params = {
@@ -109,10 +112,13 @@ def classify_intent(user_message):
                 'params': {'requires_approval': True}
             }
     
-    # UPDATE (엄격: "db" 필수)
+    # UPDATE (엄격: "db" 필수 + 제외 조건)
+    # ⚠️ 구분:
+    #   - "db 수정해" → UPDATE (CRUD, 실제 DB 수정)
+    #   - "수정해서 보여줘", "통합해" → ORGANIZE (자연어, DB 안 건드림)
     if has_db and any(cmd in message_lower for cmd in ['수정해', '수정해줘', '고쳐', '고쳐줘', '바꿔', '바꿔줘', '변경해']):
-        # 제외: "수정해서 보여달라" = ORGANIZE
-        if not any(exc in message_lower for exc in ['수정해서', '수정해도', '수정하고', '수정하면']):
+        # 제외: 자연어 명령 (AI가 수정안만 보여주기)
+        if not any(exc in message_lower for exc in ['수정해서', '수정해도', '수정하고', '수정하면', '보여줘', '보여주', '통합']):
             return {
                 'intent': 'UPDATE',
                 'confidence': 0.95,

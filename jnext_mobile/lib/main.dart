@@ -91,11 +91,11 @@ class _ChatScreenState extends State<ChatScreen> {
         final answer = data['response']?['answer'] ?? '응답 없음';
         final action = data['action'];
         
-        // ⚠️ SAVE 액션: 저장 모달창 띄우기 (바로 저장 X)
-        if (action == 'SAVE' && data['save_data'] != null) {
+        // ⚠️ SAVE/UPDATE 액션: 저장 모달창 띄우기 (바로 저장 X)
+        if ((action == 'SAVE' || action == 'UPDATE') && data['save_data'] != null) {
           setState(() {
             _messages.add(ChatMessage(
-              text: '💾 ' + answer,
+              text: (action == 'UPDATE' ? '✏️ ' : '💾 ') + answer,
               isUser: false,
               timestamp: DateTime.now(),
               responseData: data,
@@ -103,8 +103,8 @@ class _ChatScreenState extends State<ChatScreen> {
             _isLoading = false;
           });
           
-          // 저장 모달창 표시
-          _showSaveDialog(context, data['save_data']);
+          // 저장/수정 모달창 표시
+          _showSaveDialog(context, data['save_data'], isUpdate: action == 'UPDATE');
           return;
         }
         
@@ -172,7 +172,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // 저장 모달창 표시 (컬렉션 선택, 내용 수정 가능)
-  Future<void> _showSaveDialog(BuildContext context, Map<String, dynamic> saveData) async {
+  Future<void> _showSaveDialog(BuildContext context, Map<String, dynamic> saveData, {bool isUpdate = false}) async {
     final titleController = TextEditingController(text: saveData['title']);
     final categoryController = TextEditingController(text: saveData['category']);
     final contentController = TextEditingController(text: saveData['content']);
@@ -182,12 +182,39 @@ class _ChatScreenState extends State<ChatScreen> {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('💾 저장하기'),
+        title: Text(isUpdate ? '✏️ 수정하기' : '💾 저장하기'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 원본 문서 정보 (UPDATE 모드일 때만 표시)
+              if (isUpdate && saveData['source_docs'] != null && (saveData['source_docs'] as List).isNotEmpty)
+                ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('📄 원본 문서', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        ...((saveData['source_docs'] as List).take(3).map((doc) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '• ${doc['collection']}/${doc['doc_id']}',
+                            style: const TextStyle(fontSize: 12, color: Colors.blue),
+                          ),
+                        ))),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              
               // 컬렉션 선택
               const Text('컬렉션', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
