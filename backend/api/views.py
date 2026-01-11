@@ -774,10 +774,13 @@ def chat(request):
         # SAVE 의도 처리
         if intent == 'SAVE':
             if not last_ai_response:
+                print(f"[SAVE Error] last_ai_response is None - last_user_message: {last_user_message}")
                 return JsonResponse({
                     'status': 'error',
-                    'message': '저장할 답변이 없습니다. 먼저 질문을 해주세요.'
+                    'message': '저장할 답변이 없습니다. 먼저 질문을 해주세요.\n(마지막 AI 응답이 세션에 없습니다)'
                 }, status=400)
+            
+            print(f"[SAVE] last_ai_response keys: {last_ai_response.keys() if last_ai_response else 'None'}")
             
             # ⚠️ 바로 저장하지 않고, 저장 모달창용 데이터만 준비
             collection = intent_data['params']['collection']

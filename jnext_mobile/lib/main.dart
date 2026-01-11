@@ -773,10 +773,25 @@ class ChatBubble extends StatelessWidget {
 
   // AI 응답 클릭 시 편집 모달창
   void _showEditDialog(BuildContext context) {
-    final titleController = TextEditingController(text: '');
-    final categoryController = TextEditingController(text: '기타');
-    final contentController = TextEditingController(text: message.text.replaceFirst(RegExp(r'^[🤖📊💾📝🗑️✏️]\s*'), ''));
-    final fullArticleController = TextEditingController(text: message.text.replaceFirst(RegExp(r'^[🤖📊💾📝🗑️✏️]\s*'), ''));
+    // responseData에서 필드 추출
+    String initialTitle = '';
+    String initialCategory = '기타';
+    String initialContent = message.text.replaceFirst(RegExp(r'^[🤖📊💾📝🗑️✏️]\s*'), '');
+    String initialFullArticle = message.text.replaceFirst(RegExp(r'^[🤖📊💾📝🗑️✏️]\s*'), '');
+    
+    // save_data가 있으면 사용
+    if (message.responseData != null && message.responseData!['save_data'] != null) {
+      final saveData = message.responseData!['save_data'];
+      initialTitle = saveData['title'] ?? '';
+      initialCategory = saveData['category'] ?? '기타';
+      initialContent = saveData['content'] ?? initialContent;
+      initialFullArticle = saveData['full_article'] ?? initialFullArticle;
+    }
+    
+    final titleController = TextEditingController(text: initialTitle);
+    final categoryController = TextEditingController(text: initialCategory);
+    final contentController = TextEditingController(text: initialContent);
+    final fullArticleController = TextEditingController(text: initialFullArticle);
     String selectedCollection = 'hino_draft';
 
     showDialog(
