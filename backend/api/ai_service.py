@@ -79,6 +79,12 @@ def classify_intent(user_message):
             'confidence': 0.95,
             'params': {...}
         }
+    
+    J님 설계 철학:
+    - 명령어는 단순하게 (복합 명령어 없음)
+    - 모든 저장은 모달창 (자동 저장 없음)
+    - 자연어는 AI에게 맡김 (최대한 활용)
+    - DB 통제만 엄격 (거짓/환각/메모리)
     """
     message = user_message.strip()
     message_lower = message.lower()
