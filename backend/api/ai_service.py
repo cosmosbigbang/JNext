@@ -250,6 +250,7 @@ def _call_gemini(full_message, system_prompt, model_key='gemini-pro', temperatur
             config={
                 'system_instruction': system_prompt,
                 'temperature': temperature,  # 모드별 temperature 적용
+                'max_output_tokens': 32768,  # ⭐ 긴 문서 출력 가능 (기본 8192 → 32768)
                 'response_mime_type': 'application/json',  # JSON 강제
                 'response_schema': settings.AI_RESPONSE_SCHEMA,  # 스키마 강제
             }
