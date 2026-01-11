@@ -194,6 +194,7 @@ GEMINI_CLIENT = None
 
 if GEMINI_API_KEY:
     try:
+        print(f"[JNext] Using Gemini API Key: {GEMINI_API_KEY[:20]}...")
         GEMINI_CLIENT = genai.Client(api_key=GEMINI_API_KEY)
         GEMINI_INITIALIZED = True
         print(f"[JNext] Gemini AI initialized successfully (google.genai)")

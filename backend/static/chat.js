@@ -162,7 +162,7 @@ async function sendMessage() {
 
         const data = await response.json();
 
-        if (data.status === 'success') {
+        if (data.status === 'success' || data.status === 'confirm') {
             displayAIResponse(data);
         } else {
             addMessage('ai', `❌ 에러: ${data.message}`);
@@ -221,21 +221,22 @@ function displayAIResponse(data) {
             </div>
     `;
 
-    // 문서 리스트 표시 (READ 명령 시)
-    if (data.document_list && data.document_list.length > 0) {
+    // 문서 리스트 표시 (READ 명령 또는 DELETE candidates)
+    const docList = data.document_list || data.candidates || [];
+    if (docList.length > 0) {
         // UPDATE용 검색 결과 저장
-        lastSearchResults = data.document_list;
+        lastSearchResults = docList;
         
         content += `
             <div class="document-list-panel" style="margin: 15px 0; background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                <strong>📄 문서 리스트 (${data.document_list.length}개):</strong>
+                <strong>📄 ${action === 'DELETE' ? '🗑️ 삭제 대상' : '문서 리스트'} (${docList.length}개):</strong>
                 <div style="margin-top: 10px;">
-                    ${data.document_list.map((doc, idx) => `
+                    ${docList.map((doc, idx) => `
                         <div class="document-item" style="background: white; padding: 10px; margin: 8px 0; border-radius: 6px; border-left: 4px solid #667eea;" data-doc-index="${idx}">
                             <div style="display: flex; align-items: start;">
                                 <input type="checkbox" class="doc-checkbox" 
                                        data-collection="${doc.collection}" 
-                                       data-doc-id="${doc.doc_id}"
+                                       data-doc-id="${doc.doc_id || doc.id}"
                                        onclick="event.stopPropagation()"
                                        style="margin-right: 10px; margin-top: 3px; width: 18px; height: 18px;">
                                 <div style="flex: 1; cursor: pointer;" class="doc-content-area">

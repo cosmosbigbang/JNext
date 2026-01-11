@@ -1086,16 +1086,76 @@ def chat(request):
         
         # DELETE 의도 처리 (문서 삭제)
         if intent == 'DELETE':
+            # 사용자 메시지에서 삭제할 제목 추출
+            db = firestore.client()
+            
+            # 키워드 추출 (조사 제거 - 띄어쓰기 기준)
+            keywords = user_message.lower()
+            # 명령어만 제거 (조사는 단어 분리 후 처리)
+            for word in ['db에서', 'db ', '삭제해', '삭제해줘', '지워', '지워줘', '제거해']:
+                keywords = keywords.replace(word, ' ')
+            
+            # 띄어쓰기로 분리 후 조사만 제거
+            words = keywords.split()
+            filtered_words = []
+            for word in words:
+                # 끝에 조사가 붙은 경우만 제거
+                if word.endswith(('를', '을', '가', '이', '은', '는', '에서')):
+                    word = word[:-1] if len(word) > 1 else word
+                    if word.endswith('을'):  # '을'은 2글자
+                        word = word[:-1] if len(word) > 1 else word
+                if word:  # 빈 문자열 제외
+                    filtered_words.append(word)
+            
+            keywords = ' '.join(filtered_words).strip()
+            
+            print(f"[DELETE] 원본 메시지: {user_message}")
+            print(f"[DELETE] 추출된 키워드: '{keywords}'")
+            
+            # 모든 컬렉션에서 제목 검색
+            found_docs = []
+            for collection_name in ['hino_raw', 'hino_draft', 'hino_final']:
+                docs = db.collection(collection_name).stream()
+                for doc in docs:
+                    data = doc.to_dict()
+                    title = data.get('제목', '')
+                    title_lower = title.lower() if title else ''
+                    
+                    print(f"[DELETE] 검색 중: '{title}' (소문자: '{title_lower}')")
+                    
+                    # 유연한 매칭: 키워드가 제목에 포함되거나, 제목이 키워드에 포함
+                    if title and (keywords in title_lower or title_lower in keywords):
+                        print(f"[DELETE] ✅ 매칭됨: {title}")
+                        found_docs.append({
+                            'id': doc.id,
+                            'title': title,
+                            'collection': collection_name,
+                            'category': data.get('카테고리', ''),
+                            'preview': data.get('내용', '')[:100] + '...'
+                        })
+            
+            print(f"[DELETE] 찾은 문서 개수: {len(found_docs)}")
+            
+            if not found_docs:
+                return JsonResponse({
+                    'status': 'error',
+                    'action': 'DELETE',
+                    'message': f'"{user_message}"에서 삭제할 문서를 찾을 수 없습니다.',
+                    'response': {'answer': 'DB에 해당 문서가 없습니다.'}
+                })
+            
+            # ⭐ 삭제하지 않고 검색 결과만 반환 (체크박스용)
+            save_chat_history('user', user_message, mode, model)
+            save_chat_history('assistant', f"삭제할 문서 {len(found_docs)}개를 찾았습니다. 체크박스에서 선택 후 삭제 버튼을 눌러주세요.", mode, model)
+            
             return JsonResponse({
-                'status': 'info',
+                'status': 'confirm',  # success가 아니라 confirm (확인 필요)
                 'action': 'DELETE',
-                'message': '⚠️ 문서 삭제 기능이 준비 중입니다. 현재는 Firestore 콘솔에서 직접 삭제해주세요.',
+                'message': f'삭제할 문서 {len(found_docs)}개를 찾았습니다. 선택 후 삭제하세요.',
+                'candidates': found_docs,  # 체크박스용 리스트
                 'response': {
-                    'answer': '삭제 기능이 곧 추가됩니다. 임시로 Firebase Console을 이용해주세요.',
-                    'claims': ['DELETE Intent 감지됨', '승인 대기 중'],
-                    'evidence': [],
-                    'missing_info': ['삭제할 문서 ID'],
-                    'confidence': 0.5
+                    'answer': f"{len(found_docs)}개 문서를 찾았습니다:\n\n" + 
+                              "\n".join([f"- {doc['title']} ({doc['collection']})" for doc in found_docs])
                 }
             })
         

@@ -109,8 +109,9 @@ def classify_intent(user_message):
                 'params': params
             }
     
-    # DELETE (엄격: "db" 필수)
-    if has_db and any(cmd in message_lower for cmd in ['삭제해', '삭제해줘', '지워', '지워줘', '제거해']):
+    # DELETE (엄격: "db" 또는 카테고리 필수)
+    # "db 삭제해" 또는 "하이노밸런스 삭제해" 모두 허용
+    if (has_db or has_category) and any(cmd in message_lower for cmd in ['삭제해', '삭제해줘', '지워', '지워줘', '제거해']):
         if not any(exc in message_lower for exc in ['삭제해서', '삭제하고', '삭제하면']):
             return {
                 'intent': 'DELETE',
