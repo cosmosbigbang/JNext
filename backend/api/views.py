@@ -19,6 +19,65 @@ def now_kst():
 last_ai_response = None
 last_user_message = None
 
+# 대화 기록 (최근 10개 메시지 저장)
+conversation_history = []
+MAX_HISTORY = 10
+
+
+def save_chat_history(role, content, mode, model):
+    """
+    대화 기록을 Firestore에 저장
+    
+    Args:
+        role: 'user' | 'assistant'
+        content: 메시지 내용
+        mode: organize | hybrid | analysis
+        model: gemini-flash | gemini-pro | gpt
+    """
+    try:
+        db = firestore.client()
+        db.collection('chat_history').add({
+            '역할': role,
+            '내용': content,
+            '시간': now_kst(),
+            '모드': mode,
+            '모델': model
+        })
+    except Exception as e:
+        print(f"[대화 저장 실패] {str(e)}")
+
+
+def load_chat_history(limit=20):
+    """
+    Firestore에서 최근 대화 기록 조회
+    
+    Args:
+        limit: 최근 몇 개 메시지 (기본 20개 = 10턴)
+    
+    Returns:
+        list: [{'role': 'user', 'content': '...'}, ...]
+    """
+    try:
+        db = firestore.client()
+        docs = db.collection('chat_history')\
+                 .order_by('시간', direction=firestore.Query.DESCENDING)\
+                 .limit(limit)\
+                 .stream()
+        
+        history = []
+        for doc in docs:
+            data = doc.to_dict()
+            history.append({
+                'role': data.get('역할', 'user'),
+                'content': data.get('내용', '')
+            })
+        
+        # 시간 역순으로 정렬 (오래된 것부터)
+        return list(reversed(history))
+    except Exception as e:
+        print(f"[대화 로드 실패] {str(e)}")
+        return []
+
 
 def determine_save_targets(user_message, checkbox_values):
     """
@@ -1034,14 +1093,22 @@ def chat(request):
         if intent == 'ORGANIZE':
             # DB는 이미 위에서 조회됨 (organize/hybrid 모드)
             
+            # Firestore에서 최근 대화 20개 로드
+            chat_history = load_chat_history(limit=20)
+            
             # 자연어 그대로 AI에게 전달 (JSON 강제 안함)
             ai_response = call_ai_model(
                 model_name=model,
                 user_message=user_message,
                 system_prompt=system_prompt,  # 모드별 프롬프트 사용
                 db_context=db_context,
-                mode=mode
+                mode=mode,
+                conversation_history=chat_history  # Firestore 대화 기록 전달
             )
+            
+            # Firestore에 대화 저장
+            save_chat_history('user', user_message, mode, model)
+            save_chat_history('assistant', ai_response.get('answer', ''), mode, model)
             
             # 자유 형식 응답 반환
             return JsonResponse({
@@ -1191,18 +1258,27 @@ JSON 형식:
             })
         
         # 일반 질문 (NONE)
+        
+        # Firestore에서 최근 대화 20개 로드 (10턴)
+        chat_history = load_chat_history(limit=20)
+        
         # Phase 4-3: 멀티 모델 AI 호출 (JSON 응답 강제)
         ai_response = call_ai_model(
             model_name=model,
             user_message=user_message,
             system_prompt=system_prompt,
             db_context=db_context,
-            mode=mode
+            mode=mode,
+            conversation_history=chat_history  # Firestore 대화 기록 전달
         )
         
         # Phase 6: 세션에 저장
         last_ai_response = ai_response
         last_user_message = user_message
+        
+        # Firestore에 대화 저장
+        save_chat_history('user', user_message, mode, model)
+        save_chat_history('assistant', ai_response.get('answer', ''), mode, model)
         
         # AI가 저장 위치 자동 판단
         suggested_collections = []

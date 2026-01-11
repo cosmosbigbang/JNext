@@ -170,7 +170,7 @@ def classify_intent(user_message):
     }
 
 
-def call_ai_model(model_name, user_message, system_prompt, db_context, temperature=None, mode='hybrid'):
+def call_ai_model(model_name, user_message, system_prompt, db_context, temperature=None, mode='hybrid', conversation_history=None):
     """
     AI 모델 호출 (멀티 모델 지원)
     
@@ -181,6 +181,7 @@ def call_ai_model(model_name, user_message, system_prompt, db_context, temperatu
         db_context: Firestore DB 데이터
         temperature: 창의성 수준 (None이면 mode에 따라 자동 설정)
         mode: 'organize' | 'hybrid' | 'analysis'
+        conversation_history: 이전 대화 기록 (list of {'role': 'user'/'assistant', 'content': '...'})
     
     Returns:
         dict: JSON 응답 (AI_RESPONSE_SCHEMA 형식)
@@ -203,7 +204,16 @@ def call_ai_model(model_name, user_message, system_prompt, db_context, temperatu
     model_name_korean = model_info_map.get(model_name, model_name)
     enhanced_prompt = f"🎯 당신의 이름: {model_name_korean}\n\n{system_prompt}"
     
-    full_message = f"{db_context}\n\nJ님 질문: {user_message}"
+    # 대화 기록 포맷팅
+    history_context = ""
+    if conversation_history and len(conversation_history) > 0:
+        history_context = "\n\n=== 이전 대화 맥락 ===\n"
+        for msg in conversation_history[-10:]:  # 최근 10개만 (5턴)
+            role_kr = "J님" if msg['role'] == 'user' else model_name_korean
+            history_context += f"{role_kr}: {msg['content']}\n\n"
+        history_context += "=== 현재 질문 ===\n"
+    
+    full_message = f"{history_context}{db_context}\n\nJ님 질문: {user_message}"
     
     # Gemini 계열 (Flash/Pro)
     if model_name in ['gemini-flash', 'gemini-pro']:
