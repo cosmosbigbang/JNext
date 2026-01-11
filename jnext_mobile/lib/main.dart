@@ -664,6 +664,10 @@ class ChatBubble extends StatelessWidget {
     return Align(
       alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
+        // AI 응답 클릭 → 편집 모달창
+        onTap: !message.isUser ? () {
+          _showEditDialog(context);
+        } : null,
         onLongPress: () {
           Clipboard.setData(ClipboardData(text: message.text));
           ScaffoldMessenger.of(context).showSnackBar(
@@ -765,6 +769,161 @@ class ChatBubble extends StatelessWidget {
         ), // Container 닫기
       ), // GestureDetector 닫기
     ); // Align 닫기
+  }
+
+  // AI 응답 클릭 시 편집 모달창
+  void _showEditDialog(BuildContext context) {
+    final titleController = TextEditingController(text: '');
+    final categoryController = TextEditingController(text: '기타');
+    final contentController = TextEditingController(text: message.text.replaceFirst(RegExp(r'^[🤖📊💾📝🗑️✏️]\s*'), ''));
+    final fullArticleController = TextEditingController(text: message.text.replaceFirst(RegExp(r'^[🤖📊💾📝🗑️✏️]\s*'), ''));
+    String selectedCollection = 'hino_draft';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('📝 편집 및 저장'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 컬렉션 선택
+              const Text('컬렉션', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: selectedCollection,
+                items: const [
+                  DropdownMenuItem(value: 'hino_raw', child: Text('💭 Raw (아이디어)')),
+                  DropdownMenuItem(value: 'hino_draft', child: Text('📝 Draft (초안)')),
+                  DropdownMenuItem(value: 'hino_final', child: Text('✅ Final (최종)')),
+                ],
+                onChanged: (value) {
+                  selectedCollection = value!;
+                },
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // 제목
+              const Text('제목', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  hintText: 'AI 응답 정리',
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // 카테고리
+              const Text('카테고리', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: categoryController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // 내용 (요약)
+              const Text('내용 (요약)', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: contentController,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.all(12),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // 전체글
+              const Text('전체글', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: fullArticleController,
+                maxLines: 10,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.all(12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              // 저장 API 호출
+              await _saveToFirestore(
+                context: context,
+                collection: selectedCollection,
+                title: titleController.text.isEmpty ? 'AI 응답 정리' : titleController.text,
+                category: categoryController.text,
+                content: contentController.text,
+                fullArticle: fullArticleController.text,
+              );
+              Navigator.pop(context);
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Firestore 저장
+  Future<void> _saveToFirestore({
+    required BuildContext context,
+    required String collection,
+    required String title,
+    required String category,
+    required String content,
+    required String fullArticle,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('https://jnext.onrender.com/api/v1/save-summary/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'collection': collection,
+          'title': title,
+          'category': category,
+          'subcategory': '',
+          'content': content,
+          'full_article': fullArticle,
+          'original_question': '',
+          'ai_response': {},
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('✅ $collection에 저장되었습니다!')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ 저장 실패: ${response.statusCode}')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ 오류: $e')),
+      );
+    }
   }
 }
 
