@@ -30,7 +30,7 @@ def save_chat_history(role, content, mode, model):
     
     Args:
         role: 'user' | 'assistant'
-        content: 메시지 내용
+        content: 메시지 내용 (전체 저장)
         mode: organize | hybrid | analysis
         model: gemini-flash | gemini-pro | gpt
     """
@@ -38,7 +38,7 @@ def save_chat_history(role, content, mode, model):
         db = firestore.client()
         db.collection('chat_history').add({
             '역할': role,
-            '내용': content,
+            '내용': content,  # 전체 저장 (제한 없음)
             '시간': now_kst(),
             '모드': mode,
             '모델': model
@@ -59,17 +59,27 @@ def load_chat_history(limit=20):
     """
     try:
         db = firestore.client()
-        docs = db.collection('chat_history')\
-                 .order_by('시간', direction=firestore.Query.DESCENDING)\
-                 .limit(limit)\
-                 .stream()
+        # Firestore 인덱스 없이 전체 조회 후 Python에서 정렬
+        docs = db.collection('chat_history').stream()
         
-        history = []
+        # 시간 기준 내림차순 정렬 (최신순)
+        all_docs = []
         for doc in docs:
             data = doc.to_dict()
+            data['_id'] = doc.id
+            all_docs.append(data)
+        
+        # 시간순 정렬 (최신 → 오래된)
+        sorted_docs = sorted(all_docs, key=lambda x: x.get('시간', ''), reverse=True)
+        
+        # 최근 limit개만 선택
+        recent_docs = sorted_docs[:limit]
+        
+        history = []
+        for data in recent_docs:
             history.append({
                 'role': data.get('역할', 'user'),
-                'content': data.get('내용', '')
+                'content': data.get('내용', '')  # 전체 조회 (제한 없음)
             })
         
         # 시간 역순으로 정렬 (오래된 것부터)
