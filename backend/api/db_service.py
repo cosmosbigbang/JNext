@@ -58,6 +58,10 @@ class FirestoreService:
                     doc_data['_id'] = doc.id
                     doc_data['_collection'] = collection_name
                     
+                    # ⚠️ 메모리 절약: 전체글 길이 제한 (1500자)
+                    if '전체글' in doc_data and len(doc_data['전체글']) > 1500:
+                        doc_data['전체글'] = doc_data['전체글'][:1500] + '... (이하 생략)'
+                    
                     # DatetimeWithNanoseconds를 ISO 문자열로 변환
                     doc_data = FirestoreService._convert_timestamps(doc_data)
                     

@@ -740,12 +740,23 @@ def chat(request):
         intent_data = classify_intent(user_message)
         intent = intent_data['intent']
         
-        # DB 조회 - 모든 모드에서 기본 실행 (organize/hybrid만, analysis는 순수 대화)
+        # ⚠️ J님 핵심 규칙: "db" 목적어 없으면 순수 자연어 (DB 참조 X)
+        message_lower = user_message.lower()
+        has_db = any(db in message_lower for db in ['db', 'database', '데이터베이스', '디비'])
+        
+        # DB 조회 조건:
+        # 1. organize/hybrid 모드
+        # 2. "db" 목적어가 있거나 READ/UPDATE/DELETE Intent
         db_context = ""
         total_docs = 0
         
-        if mode in ['organize', 'hybrid']:
-            # 항상 DB 상세 제공 (AI가 판단하도록)
+        should_query_db = (
+            mode in ['organize', 'hybrid'] and 
+            (has_db or intent in ['READ', 'UPDATE', 'DELETE'])
+        )
+        
+        if should_query_db:
+            # DB 상세 제공
             db_data = search_firestore()
             db_context = "\n=== 현재 Firestore DB 데이터 ===\n"
             
@@ -770,6 +781,9 @@ def chat(request):
                         db_context += "- 데이터 없음\n"
             
             db_context += f"\n=== 총 {total_docs}개 문서 ===\n"
+        else:
+            # DB 조회 안 함 - 순수 자연어 대화
+            print(f"[No DB Query] 순수 자연어 모드 - has_db: {has_db}, intent: {intent}")
         
         # SAVE 의도 처리
         if intent == 'SAVE':
