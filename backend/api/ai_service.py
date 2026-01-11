@@ -194,14 +194,14 @@ def call_ai_model(model_name, user_message, system_prompt, db_context, temperatu
         }
         temperature = temperature_map.get(mode, 0.5)
     
-    # 모델 정보 주입
+    # 모델 정보 주입 (J님 명명)
     model_info_map = {
-        'gemini-flash': '젠 (Gemini 2.5 Flash) - 빠르고 정확한 한글 AI',
-        'gemini-pro': '젠시 (Gemini Pro) - 심층 분석 AI',
-        'gpt': '진 (GPT-4o) - 창의적 추론 AI'
+        'gemini-pro': '젠',      # Gemini Pro = 젠 (정확한 놈)
+        'gemini-flash': '젠시',  # Gemini Flash = 젠시 (빠른 놈)
+        'gpt': '진'              # GPT-4o = 진 (창의적인 놈)
     }
-    model_info = model_info_map.get(model_name, model_name)
-    enhanced_prompt = f"[당신의 정체성]\n당신은 '{model_info}' 입니다.\n\n{system_prompt}"
+    model_name_korean = model_info_map.get(model_name, model_name)
+    enhanced_prompt = f"🎯 당신의 이름: {model_name_korean}\n\n{system_prompt}"
     
     full_message = f"{db_context}\n\nJ님 질문: {user_message}"
     
