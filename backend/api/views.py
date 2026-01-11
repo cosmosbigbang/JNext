@@ -826,16 +826,16 @@ def chat(request):
                     db_context += f"\n## {collection_name} ({doc_count}개 문서)\n"
                     
                     if doc_count > 0:
-                        for idx, doc in enumerate(documents[:3], 1):  # 3개로 제한
+                        for idx, doc in enumerate(documents[:2], 1):  # 2개로 축소 (메모리 최적화)
                             db_context += f"\n### 문서 {idx}\n"
                             db_context += f"제목: {doc.get('제목', 'N/A')}\n"
                             db_context += f"카테고리: {doc.get('카테고리', 'N/A')}\n"
-                            # 전체 내용 제공 (제한 없음)
+                            # 내용/전체글 길이 제한 (메모리 최적화)
                             content = doc.get('내용', '')
                             full_text = doc.get('전체글', '')
-                            db_context += f"내용: {content}\n"
+                            db_context += f"내용: {content[:1000]}\n"  # 1000자 제한
                             if full_text:
-                                db_context += f"전체글: {full_text}\n"
+                                db_context += f"전체글: {full_text[:5000]}...\n"  # 5000자로 증가
                     else:
                         db_context += "- 데이터 없음\n"
             
