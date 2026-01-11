@@ -779,7 +779,7 @@ def chat(request):
                     'message': '저장할 답변이 없습니다. 먼저 질문을 해주세요.'
                 }, status=400)
             
-            # 자동 저장
+            # ⚠️ 바로 저장하지 않고, 저장 모달창용 데이터만 준비
             collection = intent_data['params']['collection']
             title = f"{last_user_message[:30]}... 정리" if last_user_message else "AI 답변 정리"
             
@@ -837,34 +837,24 @@ def chat(request):
                     content += f"[{idx}] {ev.get('collection', '')}/{ev.get('doc_id', '')}\n"
                     content += f"   {ev.get('field', '')}: {ev.get('value', '')}\n\n"
             
-            # Firestore에 저장
-            db = firestore.client()
-            doc_data = {
-                '제목': title,
-                '카테고리': '기타',
-                '운동명': '',  # 중분류 (운동명)
-                '내용': content,  # 요약본
-                '전체글': full_article,  # 출판용 전체 글
-                '원본질문': last_user_message,
-                'AI응답': last_ai_response,
-                '데이터상태': 'FINAL' if collection == 'hino_final' else 'DRAFT',
-                '작성일시': now_kst(),
-                '작성자': 'J님 (자동저장)',
-                '종류': '정리'
-            }
-            
-            doc_ref = db.collection(collection).add(doc_data)
-            doc_id = doc_ref[1].id
-            
+            # 저장 모달창용 데이터 반환 (실제 저장은 안 함!)
             return JsonResponse({
                 'status': 'success',
-                'action': 'SAVE',
-                'message': f'✅ {collection}에 자동 저장되었습니다!',
-                'doc_id': doc_id,
-                'collection': collection,
+                'action': 'SAVE',  # 모바일에서 이걸 보고 저장 모달창 띄움
+                'message': '저장할 내용이 준비되었습니다. 저장창에서 확인하세요.',
+                'save_data': {  # 저장 모달창에 표시할 데이터
+                    'title': title,
+                    'category': '기타',
+                    'subcategory': '',
+                    'content': content,
+                    'full_article': full_article,
+                    'collection': collection,  # 기본 컬렉션 (변경 가능)
+                    'original_question': last_user_message,
+                    'ai_response': last_ai_response
+                },
                 'response': {
-                    'answer': f'"{last_user_message[:50]}..." 답변을 {collection}에 저장했습니다.',
-                    'claims': [f'문서 ID: {doc_id}', f'컬렉션: {collection}'],
+                    'answer': '저장할 내용이 준비되었습니다. 저장창에서 컬렉션을 선택하고 내용을 수정한 후 저장하세요.',
+                    'claims': ['제목: ' + title, '기본 컬렉션: ' + collection, '내용 길이: ' + str(len(content)) + '자'],
                     'evidence': [],
                     'missing_info': [],
                     'confidence': 1.0

@@ -91,10 +91,26 @@ class _ChatScreenState extends State<ChatScreen> {
         final answer = data['response']?['answer'] ?? '응답 없음';
         final action = data['action'];
         
+        // ⚠️ SAVE 액션: 저장 모달창 띄우기 (바로 저장 X)
+        if (action == 'SAVE' && data['save_data'] != null) {
+          setState(() {
+            _messages.add(ChatMessage(
+              text: '💾 ' + answer,
+              isUser: false,
+              timestamp: DateTime.now(),
+              responseData: data,
+            ));
+            _isLoading = false;
+          });
+          
+          // 저장 모달창 표시
+          _showSaveDialog(context, data['save_data']);
+          return;
+        }
+        
         // 액션에 따른 아이콘
         String icon = '🤖 ';
         if (action == 'READ') icon = '📊 ';
-        else if (action == 'SAVE') icon = '💾 ';
         else if (action == 'GENERATE_FINAL') icon = '📝 ';
         else if (action == 'DELETE') icon = '🗑️ ';
         else if (action == 'UPDATE') icon = '✏️ ';
@@ -152,6 +168,175 @@ class _ChatScreenState extends State<ChatScreen> {
       print('[JNext Error] $_apiUrl');
       print('[JNext Error] Mode: $_mode');
       print('[JNext Error] Exception: $e');
+    }
+  }
+
+  // 저장 모달창 표시 (컬렉션 선택, 내용 수정 가능)
+  Future<void> _showSaveDialog(BuildContext context, Map<String, dynamic> saveData) async {
+    final titleController = TextEditingController(text: saveData['title']);
+    final categoryController = TextEditingController(text: saveData['category']);
+    final contentController = TextEditingController(text: saveData['content']);
+    final fullArticleController = TextEditingController(text: saveData['full_article']);
+    String selectedCollection = saveData['collection'] ?? 'hino_draft';
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('💾 저장하기'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 컬렉션 선택
+              const Text('컬렉션', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: selectedCollection,
+                items: const [
+                  DropdownMenuItem(value: 'hino_raw', child: Text('💭 Raw (아이디어)')),
+                  DropdownMenuItem(value: 'hino_draft', child: Text('📝 Draft (초안)')),
+                  DropdownMenuItem(value: 'hino_final', child: Text('✅ Final (최종)')),
+                ],
+                onChanged: (value) {
+                  selectedCollection = value!;
+                },
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // 제목
+              const Text('제목', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // 카테고리
+              const Text('카테고리', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: categoryController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // 내용 (요약)
+              const Text('내용 (요약)', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: contentController,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.all(12),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // 전체글
+              const Text('전체글', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: fullArticleController,
+                maxLines: 10,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.all(12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              // 실제 저장 API 호출
+              await _saveDocument(
+                collection: selectedCollection,
+                title: titleController.text,
+                category: categoryController.text,
+                content: contentController.text,
+                fullArticle: fullArticleController.text,
+                originalQuestion: saveData['original_question'],
+                aiResponse: saveData['ai_response'],
+              );
+              Navigator.pop(context);
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 실제 저장 API 호출
+  Future<void> _saveDocument({
+    required String collection,
+    required String title,
+    required String category,
+    required String content,
+    required String fullArticle,
+    required String originalQuestion,
+    required Map<String, dynamic> aiResponse,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('https://jnext.onrender.com/api/v1/save-summary/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'collection': collection,
+          'title': title,
+          'category': category,
+          'subcategory': '',
+          'content': content,
+          'full_article': fullArticle,
+          'original_question': originalQuestion,
+          'ai_response': aiResponse,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        setState(() {
+          _messages.add(ChatMessage(
+            text: '✅ 저장 완료!\n컬렉션: $collection\n문서 ID: ${data['doc_id']}',
+            isUser: false,
+            timestamp: DateTime.now(),
+          ));
+        });
+      } else {
+        setState(() {
+          _messages.add(ChatMessage(
+            text: '❌ 저장 실패: ${response.statusCode}\n${utf8.decode(response.bodyBytes)}',
+            isUser: false,
+            timestamp: DateTime.now(),
+          ));
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _messages.add(ChatMessage(
+          text: '❌ 저장 오류: $e',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
     }
   }
 
