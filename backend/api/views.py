@@ -1340,19 +1340,41 @@ def chat(request):
             # Firestore에서 최근 대화 20개 로드
             chat_history = load_chat_history(limit=20)
             
-            # 자연어 그대로 AI에게 전달 (JSON 강제 안함)
-            ai_response = call_ai_model(
-                model_name=model,
-                user_message=user_message,
-                system_prompt=system_prompt,  # 모드별 프롬프트 사용
-                db_context=db_context,
-                mode=mode,
-                conversation_history=chat_history  # Firestore 대화 기록 전달
-            )
-            
-            # Firestore에 대화 저장
+            # ⭐ 사용자 메시지 즉시 저장 (AI 실패와 무관)
             save_chat_history('user', user_message, mode, model)
-            save_chat_history('assistant', ai_response.get('answer', ''), mode, model)
+            
+            # ⭐ AI 호출 with 에러 핸들링
+            try:
+                # 자연어 그대로 AI에게 전달 (JSON 강제 안함)
+                ai_response = call_ai_model(
+                    model_name=model,
+                    user_message=user_message,
+                    system_prompt=system_prompt,  # 모드별 프롬프트 사용
+                    db_context=db_context,
+                    mode=mode,
+                    conversation_history=chat_history  # Firestore 대화 기록 전달
+                )
+                
+                # Firestore에 AI 응답 저장
+                save_chat_history('assistant', ai_response.get('answer', ''), mode, model)
+            except Exception as e:
+                # AI 실패 시 에러 응답 저장
+                error_msg = f"AI 서비스 일시 중단 중입니다. 잠시 후 다시 시도해주세요. (오류: {str(e)[:100]})"
+                save_chat_history('assistant', error_msg, mode, model)
+                
+                return JsonResponse({
+                    'status': 'error',
+                    'action': 'ORGANIZE',
+                    'message': error_msg,
+                    'response': {
+                        'answer': error_msg,
+                        'claims': [],
+                        'evidence': [],
+                        'missing_info': ['AI 서비스 오류'],
+                        'confidence': 0.0
+                    },
+                    'db_documents_count': total_docs
+                })
             
             # 자유 형식 응답 반환
             return JsonResponse({
@@ -1506,23 +1528,68 @@ JSON 형식:
         # Firestore에서 최근 대화 20개 로드 (10턴)
         chat_history = load_chat_history(limit=20)
         
-        # Phase 4-3: 멀티 모델 AI 호출 (JSON 응답 강제)
-        ai_response = call_ai_model(
-            model_name=model,
-            user_message=user_message,
-            system_prompt=system_prompt,
-            db_context=db_context,
-            mode=mode,
-            conversation_history=chat_history  # Firestore 대화 기록 전달
-        )
-        
-        # Phase 6: 세션에 저장
-        last_ai_response = ai_response
-        last_user_message = user_message
-        
-        # Firestore에 대화 저장
+        # ⭐ 사용자 메시지 즉시 저장 (AI 실패와 무관)
         save_chat_history('user', user_message, mode, model)
-        save_chat_history('assistant', ai_response.get('answer', ''), mode, model)
+        
+        # ⭐ AI 호출 with 에러 핸들링 및 재시도 로직
+        ai_response = None
+        error_occurred = None
+        
+        for attempt in range(3):  # 최대 3회 재시도
+            try:
+                # Phase 4-3: 멀티 모델 AI 호출 (JSON 응답 강제)
+                ai_response = call_ai_model(
+                    model_name=model,
+                    user_message=user_message,
+                    system_prompt=system_prompt,
+                    db_context=db_context,
+                    mode=mode,
+                    conversation_history=chat_history  # Firestore 대화 기록 전달
+                )
+                break  # 성공 시 반복 중단
+                
+            except Exception as e:
+                error_occurred = e
+                error_str = str(e)
+                
+                # 503 에러 시 재시도 (exponential backoff)
+                if '503' in error_str and attempt < 2:
+                    import time
+                    wait_time = 2 ** attempt  # 1초, 2초, 4초
+                    print(f"[RETRY] Attempt {attempt + 1}/3 failed with 503. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                
+                # 재시도 실패 또는 다른 에러 - 루프 중단
+                break
+        
+        # AI 응답 처리
+        if ai_response:
+            # Phase 6: 세션에 저장
+            last_ai_response = ai_response
+            last_user_message = user_message
+            
+            # Firestore에 AI 응답 저장
+            save_chat_history('assistant', ai_response.get('answer', ''), mode, model)
+        else:
+            # AI 실패 시 에러 응답 저장
+            error_msg = f"AI 서비스 일시 중단 중입니다. 잠시 후 다시 시도해주세요. (오류: {str(error_occurred)[:100]})"
+            save_chat_history('assistant', error_msg, mode, model)
+            
+            return JsonResponse({
+                'status': 'error',
+                'mode': mode,
+                'model': model,
+                'message': error_msg,
+                'response': {
+                    'answer': error_msg,
+                    'claims': [],
+                    'evidence': [],
+                    'missing_info': ['AI 서비스 오류'],
+                    'confidence': 0.0
+                },
+                'db_documents_count': total_docs
+            })
         
         # AI가 저장 위치 자동 판단
         suggested_collections = []

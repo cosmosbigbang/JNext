@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>하이노밸런스 데이터 확인 v3.0</title>
+    <!-- Cache Buster: 2026-01-12-16:00 FINAL -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-bottom: 3px solid #667eea;
+            overflow-x: auto;
+        }
+        
+        .tab {
+            padding: 15px 25px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+        
+        .tab:hover {
+            background: #e0e0e0;
+        }
+        
+        .tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+            margin-bottom: -3px;
+        }
+        
+        .content {
+            padding: 30px;
+            min-height: 500px;
+        }
+        
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-bar select, .filter-bar input {
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        .filter-bar select:focus, .filter-bar input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-btn {
+            padding: 12px 24px;
+            border: 2px solid #667eea;
+            border-radius: 25px;
+            background: white;
+            color: #667eea;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .filter-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        .stat-card:hover {
+            opacity: 0.9;
+        }
+        
+        .stat-card.active {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+        }
+        
+        .stat-card h3 {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card p {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+        
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        
+        .card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        
+        .card:hover {
+            border-color: #667eea;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+        
+        .card-title {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #333;
+            flex: 1;
+        }
+        
+        .badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        
+        .badge-theory { background: #e3f2fd; color: #1976d2; }
+        .badge-category { background: #f3e5f5; color: #7b1fa2; }
+        .badge-exercise { background: #e8f5e9; color: #388e3c; }
+        .badge-meme { background: #fff3e0; color: #f57c00; }
+        .badge-sitcom { background: #fce4ec; color: #c2185b; }
+        .badge-short { background: #e0f2f1; color: #00796b; }
+        
+        .card-meta {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .card-preview {
+            color: #666;
+            line-height: 1.6;
+            font-size: 0.95em;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+            color: #666;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .modal-header h2 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .close-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .modal-body {
+            padding: 30px;
+        }
+        
+        .detail-section {
+            margin-bottom: 30px;
+        }
+        
+        .detail-section h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .detail-content {
+            line-height: 1.8;
+            color: #333;
+            white-space: pre-wrap;
+        }
+        
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .meta-item {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        .meta-item strong {
+            display: block;
+            color: #667eea;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+        
+        .meta-item span {
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .meta-item.clickable {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .meta-item.clickable:hover {
+            background: #667eea;
+        }
+        
+        .meta-item.clickable:hover strong,
+        .meta-item.clickable:hover span {
+            color: white;
+        }
+        
+        @media (max-width: 768px) {
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            header h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏋️ 하이노밸런스 데이터 확인</h1>
+            <p>웹/앱 배포 전 최종 검토</p>
+        </header>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('draft')">📦 Draft (작업 중)</button>
+            <button class="tab" onclick="switchTab('content')">🎨 Content (콘텐츠)</button>
+            <button class="tab" onclick="switchTab('raw')">📄 Raw (원본)</button>
+        </div>
+        
+        <div class="content">
+            <div id="draft-content">
+                <div class="filter-bar">
+                    <select id="draft-filter" onchange="loadDraft()">
+                        <option value="">전체</option>
+                        <option value="theory_integrated">통합이론</option>
+                        <option value="category_theory">이론</option>
+                        <option value="exercise_detailed">실전</option>
+                        <option value="meme_scenario">밈 시나리오</option>
+                    </select>
+                    <input type="text" id="search" placeholder="검색..." onkeyup="filterCards()">
+                </div>
+                
+                <div class="stats" id="draft-stats"></div>
+                <div class="card-grid" id="draft-cards"></div>
+            </div>
+            
+            <div id="content-content" style="display:none;">
+                <div class="filter-bar">
+                    <select id="content-filter" onchange="loadContent()">
+                        <option value="">전체</option>
+                        <option value="sitcom_episode">시트콤 에피소드</option>
+                        <option value="sitcom_scene">시트콤 장면</option>
+                        <option value="meme">밈</option>
+                        <option value="short">숏폼</option>
+                    </select>
+                </div>
+                
+                <div class="stats" id="content-stats"></div>
+                <div class="card-grid" id="content-cards"></div>
+            </div>
+            
+            <div id="raw-content" style="display:none;">
+                <div class="filter-bar">
+                    <select id="raw-filter" onchange="loadRaw()">
+                        <option value="">전체</option>
+                        <option value="하이노워밍">하이노워밍</option>
+                        <option value="하이노골반">하이노골반</option>
+                        <option value="하이노워킹">하이노워킹</option>
+                        <option value="하이노스케이팅">하이노스케이팅</option>
+                        <option value="하이노풋삽">하이노풋삽</option>
+                        <option value="하이노철봉">하이노철봉</option>
+                        <option value="하이노이론">하이노이론</option>
+                    </select>
+                </div>
+                
+                <div class="stats" id="raw-stats"></div>
+                <div class="card-grid" id="raw-cards"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal" id="detail-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+                <h2 id="modal-title"></h2>
+                <div id="modal-meta"></div>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+    
+    <script>
+        let currentTab = 'draft';
+        let allCards = [];
+        
+        function filterByType(type) {
+            // 같은 타입 클릭시 필터 해제
+            if (currentDraftFilter === type) {
+                currentDraftFilter = '';
+                document.getElementById('draft-filter').value = '';
+            } else {
+                currentDraftFilter = type;
+                document.getElementById('draft-filter').value = type;
+            }
+            loadDraft();
+        }
+        
+        function filterByCategory(category) {
+            // Raw 탭으로 전환 (카테고리는 raw에서 확인)
+            currentTab = 'raw';
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab')[2].classList.add('active');
+            
+            document.getElementById('draft-content').style.display = 'none';
+            document.getElementById('content-content').style.display = 'none';
+            document.getElementById('raw-content').style.display = 'block';
+            
+            // 필터 적용
+            document.getElementById('raw-filter').value = category;
+            loadRaw();
+        }
+        
+        function filterContentByType(type) {
+            // Content 필터 적용
+            currentContentFilter = type;
+            document.getElementById('content-filter').value = type;
+            loadContent();
+        }
+        
+        function filterRawByCategory(category) {
+            // Raw 필터 적용
+            currentRawFilter = category;
+            document.getElementById('raw-filter').value = category;
+            loadRaw();
+        }
+        
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // 탭 버튼 활성화
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // 컨텐츠 표시
+            document.getElementById('draft-content').style.display = tab === 'draft' ? 'block' : 'none';
+            document.getElementById('content-content').style.display = tab === 'content' ? 'block' : 'none';
+            document.getElementById('raw-content').style.display = tab === 'raw' ? 'block' : 'none';
+            
+            // 데이터 로드
+            if (tab === 'draft') loadDraft();
+            else if (tab === 'content') loadContent();
+            else if (tab === 'raw') loadRaw();
+        }
+        
+        async function loadDraft() {
+            const filter = document.getElementById('draft-filter').value;
+            currentDraftFilter = filter;
+            const url = `/api/v1/hino/review/draft/${filter ? '?type=' + filter : ''}`;
+            
+            try {
+                // 전체 데이터도 가져오기 (통계용)
+                const allResponse = await fetch('/api/v1/hino/review/draft/');
+                const allResult = await allResponse.json();
+                displayDraftStats(allResult.data || []);
+                
+                // 필터링된 데이터 표시
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                allCards = result.data || [];
+                displayDraftCards(allCards);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('draft-cards').innerHTML = '<p class="loading">데이터 로드 실패</p>';
+            }
+        }
+        
+        async function loadContent() {
+            const filter = document.getElementById('content-filter').value;
+            currentContentFilter = filter;
+            const url = `/api/v1/hino/review/content/${filter ? '?type=' + filter : ''}`;
+            
+            try {
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                displayContentStats(result.data || []);
+                displayContentCards(result.data || []);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('content-cards').innerHTML = '<p class="loading">데이터 로드 실패</p>';
+            }
+        }
+        
+        async function loadRaw() {
+            const filter = document.getElementById('raw-filter').value;
+            currentRawFilter = filter;
+            const url = `/api/v1/hino/review/raw/${filter ? '?category=' + filter : ''}`;
+            
+            try {
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                displayRawStats(result.data || []);
+                displayRawCards(result.data || []);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('raw-cards').innerHTML = '<p class="loading">데이터 로드 실패</p>';
+            }
+        }
+        
+        function displayRawStats(data) {
+            const stats = {};
+            data.forEach(item => {
+                const cat = item.category;
+                stats[cat] = (stats[cat] || 0) + 1;
+            });
+            
+            const html = Object.entries(stats).map(([cat, count]) => {
+                const isActive = currentRawFilter === cat ? 'active' : '';
+                return `
+                    <div class="stat-card ${isActive}" onclick="filterRawByCategory('${cat}')">
+                        <h3>${count}</h3>
+                        <p>${cat}</p>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('raw-stats').innerHTML = html;
+        }
+        
+        function displayRawCards(data) {
+            const html = data.map(item => `
+                <div class="card" onclick="showDetail('hino_raw', '${item.id}')">
+                    <div class="card-header">
+                        <div class="card-title">${item.exercise_name}</div>
+                        <span class="badge badge-category">${item.category}</span>
+                    </div>
+                    <div class="card-meta">
+                        ${item.title !== 'N/A' ? `<span>📝 ${item.title}</span>` : ''}
+                        <span>📏 ${item.length.toLocaleString()}자</span>
+                        <span>📦 ${item.source}</span>
+                    </div>
+                    <div class="card-preview">${item.preview}</div>
+                </div>
+            `).join('');
+            
+            document.getElementById('raw-cards').innerHTML = html || '<p class="loading">데이터가 없습니다</p>';
+        }
+        
+        let currentDraftFilter = '';
+        let currentContentFilter = '';
+        let currentRawFilter = '';
+        
+        function displayDraftStats(data) {
+            // 모든 타입의 카운트 계산
+            const allTypes = ['theory_integrated', 'category_theory', 'exercise_detailed', 'meme_scenario'];
+            const stats = {};
+            
+            allTypes.forEach(type => stats[type] = 0);
+            data.forEach(item => {
+                const type = item.content_type;
+                if (stats[type] !== undefined) stats[type]++;
+            });
+            
+            const html = allTypes.map(type => {
+                const isActive = currentDraftFilter === type ? 'active' : '';
+                return `
+                    <div class="stat-card ${isActive}" onclick="filterByType('${type}')" data-type="${type}">
+                        <h3>${stats[type]}</h3>
+                        <p>${getTypeLabel(type)}</p>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('draft-stats').innerHTML = html;
+        }
+        
+        function displayDraftCards(data) {
+            const html = data.map(item => `
+                <div class="card" onclick="showDetail('hino_draft', '${item.id}')">
+                    <div class="card-header">
+                        <div class="card-title">${item.title}</div>
+                        <span class="badge badge-${getBadgeClass(item.content_type)}">${getTypeLabel(item.content_type)}</span>
+                    </div>
+                    <div class="card-meta">
+                        ${item.category !== 'N/A' ? `<span>📂 ${item.category}</span>` : ''}
+                        <span>📏 ${item.length.toLocaleString()}자</span>
+                        <span>📌 ${item.status}</span>
+                    </div>
+                    <div class="card-preview">${item.preview}</div>
+                </div>
+            `).join('');
+            
+            document.getElementById('draft-cards').innerHTML = html || '<p class="loading">데이터가 없습니다</p>';
+        }
+        
+        function displayContentStats(data) {
+            const stats = {};
+            data.forEach(item => {
+                const type = item.content_type;
+                stats[type] = (stats[type] || 0) + 1;
+            });
+            
+            const html = Object.entries(stats).map(([type, count]) => {
+                const isActive = currentContentFilter === type ? 'active' : '';
+                return `
+                    <div class="stat-card ${isActive}" onclick="filterContentByType('${type}')">
+                        <h3>${count}</h3>
+                        <p>${getTypeLabel(type)}</p>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('content-stats').innerHTML = html;
+        }
+        
+        function displayContentCards(data) {
+            const html = data.map(item => `
+                <div class="card" onclick="showDetail('hino_content', '${item.id}')">
+                    <div class="card-header">
+                        <div class="card-title">${item.title}</div>
+                        <span class="badge badge-${getBadgeClass(item.content_type)}">${getTypeLabel(item.content_type)}</span>
+                    </div>
+                    <div class="card-meta">
+                        ${item.info.style ? `<span>🎨 ${item.info.style}</span>` : ''}
+                        ${item.info.angle ? `<span>📐 ${item.info.angle}</span>` : ''}
+                        ${item.info.scene_count ? `<span>🎬 ${item.info.scene_count}개 장면</span>` : ''}
+                    </div>
+                    <div class="card-preview">${item.preview}</div>
+                </div>
+            `).join('');
+            
+            document.getElementById('content-cards').innerHTML = html || '<p class="loading">데이터가 없습니다</p>';
+        }
+        
+        async function showDetail(collection, id) {
+            try {
+                const response = await fetch(`/api/v1/hino/detail/?collection=${collection}&id=${id}`);
+                const result = await response.json();
+                
+                if (!result.success) {
+                    alert('데이터를 불러올 수 없습니다');
+                    return;
+                }
+                
+                const data = result.data;
+                
+                // 제목
+                document.getElementById('modal-title').textContent = 
+                    data.title || data.exercise_name || data.doc_id || data.theme || 'N/A';
+                
+                // 메타 정보
+                const metaHtml = `
+                    <div class="meta-grid">
+                        <div class="meta-item clickable" onclick="filterByType('${data.content_type}'); closeModal();">
+                            <strong>타입</strong>
+                            <span>${getTypeLabel(data.content_type)}</span>
+                        </div>
+                        ${data.category ? `
+                        <div class="meta-item clickable" onclick="filterByCategory('${data.category}'); closeModal();">
+                            <strong>카테고리</strong>
+                            <span>${data.category}</span>
+                        </div>` : ''}
+                        ${data.exercise_count ? `
+                        <div class="meta-item clickable" onclick="filterByCategory('${data.category}'); closeModal();">
+                            <strong>운동 수</strong>
+                            <span>${data.exercise_count}개</span>
+                        </div>` : ''}
+                        <div class="meta-item">
+                            <strong>문서 ID</strong>
+                            <span>${id}</span>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('modal-meta').innerHTML = metaHtml;
+                
+                // 본문
+                const content = data.content || data.organized_content || data.script || '';
+                document.getElementById('modal-body').innerHTML = `
+                    <div class="detail-section">
+                        <h3>내용</h3>
+                        <div class="detail-content">${content}</div>
+                    </div>
+                `;
+                
+                // 모달 표시
+                document.getElementById('detail-modal').classList.add('active');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('오류가 발생했습니다');
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('detail-modal').classList.remove('active');
+        }
+        
+        function filterCards() {
+            const search = document.getElementById('search').value.toLowerCase();
+            const cards = document.querySelectorAll('#draft-cards .card');
+            
+            cards.forEach(card => {
+                const text = card.textContent.toLowerCase();
+                card.style.display = text.includes(search) ? 'block' : 'none';
+            });
+        }
+        
+        function getTypeLabel(type) {
+            const labels = {
+                'theory_integrated': '통합 이론',
+                'category_theory': '카테고리 공통이론',
+                'exercise_detailed': '개별 운동 상세',
+                'meme_scenario': '밈 시나리오',
+                'sitcom_episode': '시트콤 에피소드',
+                'sitcom_scene': '시트콤 장면',
+                'meme': '밈',
+                'short': '숏폼'
+            };
+            return labels[type] || type;
+        }
+        
+        function getBadgeClass(type) {
+            if (type.includes('theory')) return 'theory';
+            if (type.includes('category')) return 'category';
+            if (type.includes('exercise')) return 'exercise';
+            if (type.includes('meme')) return 'meme';
+            if (type.includes('sitcom')) return 'sitcom';
+            if (type.includes('short')) return 'short';
+            return 'theory';
+        }
+        
+        // 모달 외부 클릭시 닫기
+        document.getElementById('detail-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+        
+        // 초기 로드
+        loadDraft();
+    </script>
+</body>
+</html>
