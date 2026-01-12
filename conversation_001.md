@@ -580,3 +580,192 @@ hinobalance (메인 컬렉션)
 ---
 
 **기록 업데이트**: 2026-01-13 새벽 (하이노밸런스 모바일 앱 완성, 다음 작업 계획 수립)
+
+---
+
+## 2026-01-13 (월요일) - 출근 전 세션
+
+### 🚨 Critical Bug Fix: Chat History Persistence
+
+**시간**: 오전 출근 전  
+**컨텍스트**: J님 샤워 후 돌아와서 채팅 이력 확인 요청
+
+#### 대화 1: 채팅 저장 확인 요청
+**J님**: "firestore에서 오늘 내가 대화한 내용이 저장되었는지 확인해. 안된거 같아.. 1월11일이 마지막인데"
+
+**Claude 작업**:
+1. `check_chat_history.py` 생성 (진단 스크립트)
+2. Firestore chat_history 컬렉션 조회
+3. **결과**: ❌ chat_history 컬렉션이 비어있음!
+
+**근본 원인 발견**:
+- Render 로그 분석 결과: Gemini API 503 에러 발생
+- `POST /api/v1/chat/` → Gemini API 호출 → 503 UNAVAILABLE → 500 Error
+- **문제**: AI 호출 실패 시 `save_chat_history()` 함수가 실행되지 않음
+- **영향**: JNext 모바일 대화 내용이 전혀 저장되지 않음
+
+#### 대화 2: 해결 방안 논의
+**Claude 제안**:
+1. **에러 핸들링**: AI 실패 시에도 대화 저장
+2. **Fallback 모델**: Gemini 실패 시 GPT-4o로 전환
+3. **재시도 로직**: 503 에러 시 3회 재시도 (exponential backoff)
+
+**J님**: "오케이 진행해 클로"
+
+---
+
+### ✅ 구현 완료: Chat Persistence Fix
+
+**파일**: `backend/api/views.py`
+
+**구현 내용**:
+
+1. **사용자 메시지 즉시 저장** (AI 호출 전)
+   - AI 실패와 무관하게 사용자 메시지는 절대 유실 방지
+
+2. **3회 재시도 로직** (503 에러 시)
+   ```python
+   for attempt in range(3):
+       try:
+           ai_response = call_ai_model(...)
+           break
+       except Exception as e:
+           if '503' in str(e) and attempt < 2:
+               wait_time = 2 ** attempt  # 1초, 2초, 4초
+               time.sleep(wait_time)
+               continue
+   ```
+
+3. **AI 실패 시 에러 메시지 저장**
+   - "AI 서비스 일시 중단 중입니다. 잠시 후 다시 시도해주세요."
+   - 대화 맥락 유지를 위해 Firestore에 저장
+
+4. **적용 범위**:
+   - ORGANIZE 의도 처리
+   - 일반 질문(NONE) 처리
+
+**Git Commit**:
+```bash
+git commit -m "fix: chat_history persistence with error handling and retry logic
+
+- Save user message immediately before AI call
+- 3-attempt retry with exponential backoff for 503 errors
+- Save error message to Firestore when AI fails
+- Ensures conversations persist even during Gemini API outages"
+```
+
+**배포**: ✅ GitHub push 완료 (commit: 48acdfc)
+
+---
+
+### 📱 Mobile App Enhancement: Detail Modal Loading
+
+**시간**: 출근 직전  
+**컨텍스트**: 하이노밸런스 모바일 앱 데이터 로딩 문제
+
+#### 대화 3: 모달 데이터 로딩 개선
+**J님**: "지금 하이노밸런스 모바일... 글 클릭했을때 데이터 못가져와 아직도.. 글씨 수 제한도 확인하고.. 처음에 요약은 잘가져왔는데.. 분기해서 전체 못가져오면 요약이라도 먼저 가져오게 해줘"
+
+**Claude 구현**:
+`hinobalance_mobile/lib/main.dart` - 3단계 로딩 전략
+
+**1단계: 즉시 요약 표시**
+- 기존 preview 데이터로 모달 즉시 표시
+- "전체 내용 로딩 중..." 상태 표시
+- 사용자 체감 속도 향상
+
+**2단계: 백그라운드 API 호출**
+- `/api/v1/get-document/` 호출
+- 전체 내용 우선순위:
+  ```dart
+  fullContent = detailData['전체글'] ??
+                detailData['내용'] ??
+                detailData['content'] ?? 
+                detailData['organized_content'] ?? 
+                detailData['raw_content'] ?? 
+                preview; // fallback
+  ```
+
+**3단계: 모달 교체 또는 유지**
+- **성공 시**: 요약 → 전체 내용으로 모달 교체
+- **실패 시**: 요약 그대로 유지 + 경고 메시지
+  - "전체 내용 로드 실패, 요약만 표시됩니다."
+  - 네트워크 오류 시에도 최소한의 내용은 보여줌
+
+**추가 기능**:
+- 글자 수 카운터: `${content.length}자` 표시
+- 복사 가능한 텍스트: `SelectableText` 사용
+- 에러 알림: 노란색 경고 배너
+
+**Flutter Hot Reload**: ✅ 실행 중 (SM A166L)
+
+---
+
+### 🛠️ 유틸리티 함수 생성
+
+**파일**: `backend/check_chat_history.py`
+
+**목적**: Firestore chat_history 진단 도구
+
+**기능**:
+1. 최근 대화 10개 조회
+2. 오늘 날짜 필터링
+3. 타임스탬프 포맷팅
+4. 빈 컬렉션 감지
+
+**사용법**:
+```bash
+cd backend
+venv\Scripts\python.exe check_chat_history.py
+```
+
+**출력 예시**:
+```
+============================================================
+📋 Chat History 확인
+============================================================
+❌ chat_history 컬렉션이 비어있습니다!
+
+오늘 대화: 0건
+```
+
+---
+
+### 📊 오늘 작업 완료 내역
+
+**Backend (Django/Python)**:
+- ✅ chat_history persistence 버그 수정
+- ✅ 에러 핸들링 및 재시도 로직 추가
+- ✅ check_chat_history.py 진단 도구 생성
+- ✅ Git commit & push
+
+**Mobile (Flutter)**:
+- ✅ 모달 데이터 로딩 3단계 전략 구현
+- ✅ 요약 먼저 표시 → 전체 내용 로딩
+- ✅ 에러 시 fallback 처리
+- ✅ 글자 수 카운터 추가
+
+**서버 배포**:
+- ✅ GitHub push 완료
+- ⏸️ Render 자동 배포 대기 중
+
+---
+
+### 🚀 다음 작업 (J님 퇴근 후)
+
+**우선순위 P0**:
+- [ ] 모바일 앱 테스트 (글 클릭 → 요약 → 전체 내용 확인)
+- [ ] chat_history 저장 확인 (실제 대화 후 check_chat_history.py 실행)
+
+**우선순위 P1**:
+- [ ] Firestore 컬렉션 마이그레이션 (hinobalance 부모 컬렉션)
+- [ ] JNext 범용화 (주제 선택 기능)
+
+**우선순위 P2**:
+- [ ] Render Static Site 배포 (hinobalance_mobile 웹 버전)
+
+---
+
+**J님 마지막 말씀**: "클로 수고 많았어 ㅎㅎㅎ 내가 확인해봐야하는데.. 출근해야해서 ㅎㅎㅎ"
+
+**기록 업데이트**: 2026-01-13 오전 (chat_history 버그 수정, 모바일 모달 로딩 개선)

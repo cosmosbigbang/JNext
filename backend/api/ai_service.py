@@ -202,7 +202,8 @@ def call_ai_model(model_name, user_message, system_prompt, db_context, temperatu
     model_info_map = {
         'gemini-pro': '젠',      # Gemini Pro = 젠 (정확한 놈)
         'gemini-flash': '젠시',  # Gemini Flash = 젠시 (빠른 놈)
-        'gpt': '진'              # GPT-4o = 진 (창의적인 놈)
+        'gpt': '진',             # GPT-4o = 진 (창의적인 놈)
+        'claude': '클로'         # Claude = 클로 (J님이 제일 좋아하는 놈 ㅎㅎ)
     }
     model_name_korean = model_info_map.get(model_name, model_name)
     enhanced_prompt = f"🎯 당신의 이름: {model_name_korean}\n\n{system_prompt}"
