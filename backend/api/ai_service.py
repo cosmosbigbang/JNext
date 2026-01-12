@@ -109,6 +109,10 @@ def classify_intent(user_message):
                 'params': params
             }
     
+    # 카테고리 목록 (하이노밸런스 운동 순서)
+    categories = ['하이노이론', '하이노워밍', '하이노골반', '하이노워킹', '하이노스케이팅', '하이노풋삽', '하이노철봉', '하이노기타']
+    has_category = any(cat in message_lower for cat in categories)
+    
     # DELETE (엄격: "db" 또는 카테고리 필수)
     # "db 삭제해" 또는 "하이노밸런스 삭제해" 모두 허용
     if (has_db or has_category) and any(cmd in message_lower for cmd in ['삭제해', '삭제해줘', '지워', '지워줘', '제거해']):
@@ -133,8 +137,7 @@ def classify_intent(user_message):
             }
     
     # READ (엄격: "db" 또는 카테고리 필수)
-    db_targets = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스',
-                  'draft', '초안', 'final', '최종', 'raw', '원본']
+    db_targets = categories + ['draft', '초안', 'final', '최종', 'raw', '원본', '하이노밸런스']
     
     has_category = any(cat in message_lower for cat in db_targets)
     
@@ -149,8 +152,7 @@ def classify_intent(user_message):
         if 'raw' in message_lower or '원본' in message_lower:
             params['collections'].append('hino_raw')
         
-        # 카테고리 필터링
-        categories = ['하이노이론', '하이노워킹', '하이노스케이팅', '하이노철봉', '하이노기본', '하이노밸런스']
+        # 카테고리 필터링 (하이노밸런스 운동 순서)
         for category in categories:
             if category in message:
                 params['category'] = category

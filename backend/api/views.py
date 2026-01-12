@@ -7,9 +7,183 @@ import json
 from .ai_service import call_ai_model, classify_intent, validate_ai_response  # Phase 6: 의도 분류, 검증 추가
 from .db_service import FirestoreService  # DB 서비스 레이어
 from .meme_generator import MemeGenerator  # 밈 생성기
+from django.shortcuts import render  # 템플릿 렌더링
 
 # 한국 시간대 (KST = UTC+9)
 KST = timezone(timedelta(hours=9))
+
+
+# =========================
+# 하이노밸런스 데이터 확인 API
+# =========================
+
+@csrf_exempt
+def hino_review_draft(request):
+    """hino_draft 데이터 조회 (웹 확인용)"""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'GET method required'}, status=405)
+    
+    try:
+        db = firestore.client()
+        content_type = request.GET.get('type', None)
+        category = request.GET.get('category', None)
+        
+        query = db.collection('hino_draft')
+        
+        # 필터링
+        if content_type:
+            query = query.where('content_type', '==', content_type)
+        if category:
+            query = query.where('category', '==', category)
+        
+        docs = query.stream()
+        
+        results = []
+        for doc in docs:
+            data = doc.to_dict()
+            results.append({
+                'id': doc.id,
+                'content_type': data.get('content_type', 'N/A'),
+                'category': data.get('category', 'N/A'),
+                'title': data.get('title', data.get('exercise_name', data.get('doc_id', 'N/A'))),
+                'length': len(data.get('content', data.get('organized_content', ''))),
+                'created_at': data.get('created_at', 'N/A'),
+                'status': data.get('status', 'N/A'),
+                'preview': (data.get('content', data.get('organized_content', '')))[:200] + '...'
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'count': len(results),
+            'data': results
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def hino_review_content(request):
+    """hino_content 데이터 조회 (웹 확인용)"""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'GET method required'}, status=405)
+    
+    try:
+        db = firestore.client()
+        content_type = request.GET.get('type', None)
+        
+        query = db.collection('hino_content')
+        
+        if content_type:
+            query = query.where('content_type', '==', content_type)
+        
+        docs = query.stream()
+        
+        results = []
+        for doc in docs:
+            data = doc.to_dict()
+            results.append({
+                'id': doc.id,
+                'content_type': data.get('content_type', 'N/A'),
+                'title': data.get('title', data.get('theme', data.get('exercise_name', 'N/A'))),
+                'info': {
+                    'scene_count': data.get('scene_count'),
+                    'style': data.get('style'),
+                    'angle': data.get('angle'),
+                    'episode_title': data.get('episode_title'),
+                    'scene_number': data.get('scene_number')
+                },
+                'created_at': data.get('created_at', 'N/A'),
+                'status': data.get('status', 'N/A'),
+                'preview': str(data.get('content', ''))[:200] + '...'
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'count': len(results),
+            'data': results
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def hino_review_raw(request):
+    """hino_raw 데이터 조회 (웹 확인용)"""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'GET method required'}, status=405)
+    
+    try:
+        db = firestore.client()
+        category = request.GET.get('category', None)
+        
+        query = db.collection('hino_raw')
+        
+        if category:
+            query = query.where('category', '==', category)
+        
+        docs = query.stream()
+        
+        results = []
+        for doc in docs:
+            data = doc.to_dict()
+            results.append({
+                'id': doc.id,
+                'category': data.get('category', 'N/A'),
+                'exercise_name': data.get('exercise_name', data.get('doc_id', 'N/A')),
+                'title': data.get('title', 'N/A'),
+                'length': len(data.get('content', '')),
+                'source': data.get('source', 'N/A'),
+                'created_at': data.get('created_at', 'N/A'),
+                'preview': data.get('content', '')[:200] + '...'
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'count': len(results),
+            'data': results
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def hino_get_detail(request):
+    """특정 문서 상세 조회"""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'GET method required'}, status=405)
+    
+    try:
+        collection = request.GET.get('collection', 'hino_draft')
+        doc_id = request.GET.get('id')
+        
+        if not doc_id:
+            return JsonResponse({'error': 'id parameter required'}, status=400)
+        
+        db = firestore.client()
+        doc = db.collection(collection).document(doc_id).get()
+        
+        if not doc.exists:
+            return JsonResponse({'error': 'Document not found'}, status=404)
+        
+        data = doc.to_dict()
+        
+        return JsonResponse({
+            'success': True,
+            'id': doc.id,
+            'data': data
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def hino_review_page(request):
+    """하이노밸런스 데이터 확인 웹페이지"""
+    return render(request, 'hino_review.html')
+
 
 def now_kst():
     """한국 시간 반환"""
@@ -1945,5 +2119,198 @@ def delete_documents(request):
         return JsonResponse({
             'status': 'error',
             'message': f'삭제 실패: {str(e)}',
+            'error_type': type(e).__name__
+        }, status=500)
+
+
+# ===== 하이노밸런스 자동화 API =====
+
+@csrf_exempt
+def hino_auto(request):
+    """
+    하이노밸런스 자동 처리 API
+    
+    POST /api/v1/hino/auto/
+    {
+        "command": "하이노골반 공통이론 만들어줘",
+        "action": "integrate|category_theory|organize|sitcom|meme|short",  // optional
+        "target": "하이노골반",  // optional
+        "options": {}  // optional
+    }
+    """
+    if request.method != 'POST':
+        return JsonResponse({
+            'status': 'error',
+            'message': 'POST 요청만 지원합니다.'
+        }, status=405)
+    
+    try:
+        from .automation import HinoAutomation
+        
+        data = json.loads(request.body)
+        command = data.get('command', '')
+        action = data.get('action')
+        target = data.get('target')
+        options = data.get('options', {})
+        
+        automation = HinoAutomation()
+        
+        # 명시적 action이 있으면 바로 실행
+        if action and target:
+            if action == 'integrate':
+                result = automation.integrate_documents(
+                    category=target,
+                    output_name=options.get('output_name', f'{target}통합'),
+                    versions=options.get('versions', ['summary', 'medium', 'full'])
+                )
+                return JsonResponse({
+                    'status': 'success',
+                    'action': 'integrate',
+                    'created_ids': result,
+                    'message': f'{len(result)}개 버전 생성 완료'
+                })
+            
+            elif action == 'category_theory':
+                result = automation.create_category_theory(category=target)
+                return JsonResponse({
+                    'status': 'success',
+                    'action': 'category_theory',
+                    'created_id': result,
+                    'message': f'{target} 공통이론 생성 완료'
+                })
+            
+            elif action == 'organize':
+                result = automation.organize_exercise(exercise_name=target)
+                return JsonResponse({
+                    'status': 'success',
+                    'action': 'organize',
+                    'created_id': result,
+                    'message': f'{target} 상세 정리 완료'
+                })
+            
+            elif action == 'sitcom':
+                scene_type = options.get('scene_type', 'home')
+                result = automation.create_sitcom(
+                    exercise_name=target,
+                    scene_type=scene_type
+                )
+                return JsonResponse({
+                    'status': 'success',
+                    'action': 'sitcom',
+                    'created_id': result,
+                    'message': f'{target} 시트콤 생성 완료'
+                })
+        
+        # 자연어 명령 처리 (향후 구현)
+        elif command:
+            return JsonResponse({
+                'status': 'pending',
+                'message': '자연어 명령 파싱은 아직 구현 중입니다.',
+                'command': command,
+                'hint': 'action과 target을 명시적으로 전달해주세요.'
+            })
+        
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'command 또는 action+target이 필요합니다.'
+            }, status=400)
+    
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[Hino Auto Error] {error_trace}")
+        return JsonResponse({
+            'status': 'error',
+            'message': f'자동화 실패: {str(e)}',
+            'error_type': type(e).__name__
+        }, status=500)
+
+
+@csrf_exempt
+def hino_status(request):
+    """
+    하이노밸런스 DB 현황 조회 API
+    
+    GET /api/v1/hino/status/
+    """
+    if request.method != 'GET':
+        return JsonResponse({
+            'status': 'error',
+            'message': 'GET 요청만 지원합니다.'
+        }, status=405)
+    
+    try:
+        db = firestore.client()
+        
+        # hino_raw 현황
+        raw_docs = db.collection('hino_raw').stream()
+        raw_by_category = {}
+        raw_total = 0
+        
+        for doc in raw_docs:
+            data = doc.to_dict()
+            category = data.get('category', 'N/A')
+            if category not in raw_by_category:
+                raw_by_category[category] = []
+            raw_by_category[category].append(data.get('exercise_name', doc.id))
+            raw_total += 1
+        
+        # hino_draft 현황
+        draft_docs = db.collection('hino_draft').stream()
+        draft_by_type = {}
+        draft_total = 0
+        
+        for doc in draft_docs:
+            data = doc.to_dict()
+            content_type = data.get('content_type', 'N/A')
+            if content_type not in draft_by_type:
+                draft_by_type[content_type] = []
+            draft_by_type[content_type].append(data.get('exercise_name', doc.id))
+            draft_total += 1
+        
+        # 출시 운동 18개 매칭 상태
+        release_exercises = [
+            '하이노워밍벤치', '하이노워밍기본',
+            '하이노골반상하', '하이노골반좌우', '하이노골반돌리기', '하이노골반벌리기',
+            '하이노워킹전진', '하이노워킹주먹', '하이노워킹크로스', '하이노워킹퐁당퐁당',
+            '하이노스케이팅좌우', '하이노스케이팅전진', '하이노스케이팅코너웍', '하이노스케이팅후진',
+            '하이노풋삽벽두손', '하이노풋삽벽한손',
+            '하이노철봉한손', '하이노철봉두손'
+        ]
+        
+        found = []
+        missing = []
+        for ex in release_exercises:
+            if any(ex in exercises for exercises in raw_by_category.values()):
+                found.append(ex)
+            else:
+                missing.append(ex)
+        
+        return JsonResponse({
+            'status': 'success',
+            'hino_raw': {
+                'total': raw_total,
+                'by_category': {k: len(v) for k, v in raw_by_category.items()}
+            },
+            'hino_draft': {
+                'total': draft_total,
+                'by_type': {k: len(v) for k, v in draft_by_type.items()}
+            },
+            'release_exercises': {
+                'total': len(release_exercises),
+                'found': len(found),
+                'missing': len(missing),
+                'missing_list': missing
+            }
+        })
+    
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[Hino Status Error] {error_trace}")
+        return JsonResponse({
+            'status': 'error',
+            'message': f'현황 조회 실패: {str(e)}',
             'error_type': type(e).__name__
         }, status=500)

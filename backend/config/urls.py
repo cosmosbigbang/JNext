@@ -48,4 +48,15 @@ urlpatterns = [
     path('api/v1/get-document/', views.get_document, name='get_document'),
     path('api/v1/update-documents/', views.update_documents, name='update_documents'),
     path('api/v1/delete-documents/', views.delete_documents, name='delete_documents'),
+    
+    # 하이노밸런스 자동화 API
+    path('api/v1/hino/auto/', views.hino_auto, name='hino_auto'),
+    path('api/v1/hino/status/', views.hino_status, name='hino_status'),
+    
+    # 하이노밸런스 데이터 확인 API (웹용)
+    path('hino/review/', views.hino_review_page, name='hino_review_page'),
+    path('api/v1/hino/review/draft/', views.hino_review_draft, name='hino_review_draft'),
+    path('api/v1/hino/review/content/', views.hino_review_content, name='hino_review_content'),
+    path('api/v1/hino/review/raw/', views.hino_review_raw, name='hino_review_raw'),
+    path('api/v1/hino/detail/', views.hino_get_detail, name='hino_get_detail'),
 ]
