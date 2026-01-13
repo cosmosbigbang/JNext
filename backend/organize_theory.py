@@ -11,7 +11,7 @@ from datetime import datetime
 sys.stdout.reconfigure(encoding='utf-8')
 
 if not firebase_admin._apps:
-    cred = credentials.Certificate('jnext-service-account.json')
+    cred = credentials.Certificate('../jnext-service-account.json')
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()

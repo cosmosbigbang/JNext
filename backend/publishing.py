@@ -16,7 +16,7 @@ load_dotenv()
 # Firebase 초기화
 if not firebase_admin._apps:
     base_dir = Path(__file__).resolve().parent
-    cred_path = base_dir / 'jnext-service-account.json'
+    cred_path = base_dir.parent / 'jnext-service-account.json'
     cred = credentials.Certificate(str(cred_path))
     firebase_admin.initialize_app(cred)
 
