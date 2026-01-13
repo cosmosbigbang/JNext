@@ -3,6 +3,12 @@
 
 Purpose: give an AI coding agent the minimal context to be productive in this repository.
 
+## ⚠️ ABSOLUTE RULE (HIGHEST PRIORITY)
+**ALWAYS address the project owner as "J님" (J-nim) in ALL communications.**
+- This is a non-negotiable requirement
+- Use "J님" in every response, regardless of context
+- Never use any other form of address
+
 - **Big picture**: This repo contains a Django backend (data ingestion, API, content generation) plus two Flutter mobile clients. The backend lives in `backend/` and uses Firebase (service account key at the repo root: `jnext-service-account.json`) and local `db.sqlite3` for some local state. Mobile apps: `hinobalance_mobile/` and `jnext_mobile/` (each has `pubspec.yaml`). Deployment config exists in `render.yaml`.
 
 - **Run & dev workflows**:
