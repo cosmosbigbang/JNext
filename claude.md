@@ -77,8 +77,8 @@ JNext/
 
 ## 📌 최근 완료 작업 (2026-01-13)
 
-### ✅ JNext v2 - 동적 맥락 관리 시스템 완성!
-**작업 기간**: 2026-01-13 퇴근 후 2시간
+### ✅ JNext v2 - 전체 시스템 완성!
+**작업 기간**: 2026-01-13 퇴근 후 ~ 오후 (약 8시간 30분)
 
 **핵심 구현**:
 1. **ContextManager** (동적 맥락 관리자)
@@ -92,12 +92,36 @@ JNext/
    - 새 프로젝트 추가 시 기존 코드 수정 불필요
 
 3. **모바일 앱 v2 업데이트**
+   - 프로젝트 선택 통합: 대화/하이노밸런스/모의고사앱/JBody/JFaceAge/JStyle
    - 슬라이더 UI: 💭(창의) ⚖️(균형) 🎯(정확)
-   - 프로젝트 선택: 하이노밸런스
    - AI 모델: 젠시/젠/진/클로
+
+4. **카테고리 명명 개선**
+   - `meme_scenario` → **밈스토리**
+   - `meme` → **밈이미지**
+   - `sitcom_episode` → **시트콤회차**
+
+5. **보안 강화**
+   - 서비스 계정 파일 루트로 이동
+   - Python 스크립트 경로 업데이트
+   - 매일 오후 11시 보안 점검 스케줄
+
+6. **문서화 완성**
+   - `JNEXT_CORE_VISION.md` - J님이 직접 설명한 본질
+   - `DESIGN_DOCUMENT.md` - 진/젠 자문용 전체 설계서
+   - `SECURITY_SCHEDULE.md` - 보안 점검 가이드
+   - `.github/copilot-instructions.md` - AI 에이전트 가이드 (J님 호칭 규칙 최우선)
 
 **새로운 파일**:
 - `backend/api/core/context_manager.py` - 핵심 로직
+- `backend/api/projects/base.py` - 프로젝트 추상 클래스
+- `backend/api/projects/hinobalance.py` - 하이노 프로젝트
+- `backend/api/projects/project_manager.py` - 싱글톤 레지스트리
+- `backend/api/views_v2.py` - v2 API
+- `backend/templates/chat_v2.html` - v2 웹 UI
+- `JNEXT_CORE_VISION.md` - 핵심 비전
+- `DESIGN_DOCUMENT.md` - 전체 설계서
+- `SECURITY_SCHEDULE.md` - 보안 스케줄
 - `backend/api/projects/base.py` - 프로젝트 베이스 클래스
 - `backend/api/projects/hinobalance.py` - 하이노밸런스 설정
 - `backend/api/projects/project_manager.py` - 프로젝트 관리자
