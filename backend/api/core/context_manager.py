@@ -1,0 +1,219 @@
+"""
+Context Manager - 동적 맥락 관리 시스템
+슬라이더 값에 따라 AI 맥락을 동적으로 조절
+"""
+
+from typing import Dict, List, Optional
+
+
+class ContextManager:
+    """동적 맥락 관리자"""
+    
+    @staticmethod
+    def build_context(
+        focus: int,
+        project_id: Optional[str],
+        user_message: str,
+        conversation_history: List[Dict],
+        project_db_context: str = "",
+        project_prompt: str = ""
+    ) -> Dict:
+        """
+        슬라이더 값에 따라 맥락 구성
+        
+        Args:
+            focus: 프로젝트 집중도 (0-100)
+            project_id: 프로젝트 ID (None이면 일반 대화)
+            user_message: 사용자 질문
+            conversation_history: 대화 기록
+            project_db_context: 프로젝트 DB 컨텍스트
+            project_prompt: 프로젝트 시스템 프롬프트
+            
+        Returns:
+            {
+                'system_prompt': str,
+                'full_message': str,
+                'temperature': float,
+                'weights': dict
+            }
+        """
+        
+        # 일반 대화 모드
+        if not project_id:
+            return {
+                'system_prompt': "당신은 J님의 창의적 파트너 AI입니다. J님을 '사용자'가 아닌 'J님'이라고 호칭하세요. 존댓말을 사용하고 자연스럽게 대화하세요.",
+                'full_message': ContextManager._build_general_message(user_message, conversation_history),
+                'temperature': 0.7,
+                'weights': {
+                    'conversation': 60,
+                    'project': 0,
+                    'general': 40
+                }
+            }
+        
+        # 프로젝트 모드 - 가중치 계산
+        weights = ContextManager._calculate_weights(focus)
+        temperature = ContextManager._calculate_temperature(focus)
+        
+        # 시스템 프롬프트 구성
+        system_prompt = ContextManager._build_system_prompt(
+            project_prompt, 
+            weights,
+            focus
+        )
+        
+        # 전체 메시지 구성
+        full_message = ContextManager._build_project_message(
+            user_message,
+            conversation_history,
+            project_db_context,
+            weights
+        )
+        
+        return {
+            'system_prompt': system_prompt,
+            'full_message': full_message,
+            'temperature': temperature,
+            'weights': weights
+        }
+    
+    @staticmethod
+    def _calculate_weights(focus: int) -> Dict[str, int]:
+        """
+        슬라이더 값 → 가중치 변환
+        
+        focus 0-20: 일반 지식 중심
+        focus 21-40: 일반 > 프로젝트
+        focus 41-60: 균형 (프로젝트 중심)
+        focus 61-80: 프로젝트 우선
+        focus 81-100: 프로젝트 전문가
+        """
+        
+        # 대화 맥락은 항상 15% 유지
+        conversation_weight = 15
+        
+        # 프로젝트 가중치 (focus와 비례, 더 강하게)
+        # 50% → 55%, 100% → 85%
+        project_weight = int(15 + (focus * 0.7))
+        
+        # 일반 지식 가중치 (나머지)
+        general_weight = 100 - conversation_weight - project_weight
+        
+        return {
+            'conversation': conversation_weight,
+            'project': project_weight,
+            'general': general_weight
+        }
+    
+    @staticmethod
+    def _calculate_temperature(focus: int) -> float:
+        """
+        집중도 → temperature 변환
+        
+        높은 집중도 = 낮은 temperature (정확성)
+        낮은 집중도 = 높은 temperature (창의성)
+        """
+        # focus 0-100 → temperature 0.7-0.2
+        # 반비례 관계
+        temp = 0.7 - (focus / 100 * 0.5)
+        return round(temp, 2)
+    
+    @staticmethod
+    def _build_system_prompt(project_prompt: str, weights: Dict, focus: int) -> str:
+        """시스템 프롬프트 구성"""
+        
+        base_prompt = f"""당신은 J님의 창의적 파트너 AI입니다.
+
+[현재 설정]
+- 프로젝트 집중도: {focus}%
+- 맥락 가중치:
+  * 대화 흐름: {weights['conversation']}%
+  * 프로젝트 DB: {weights['project']}%
+  * 일반 지식: {weights['general']}%
+
+"""
+        
+        if project_prompt:
+            base_prompt += f"[프로젝트 역할]\n{project_prompt}\n\n"
+        
+        # 집중도에 따른 지침
+        if focus >= 70:
+            base_prompt += """[중요 지침]
+- 프로젝트 DB 내용을 우선적으로 참고하세요.
+- DB에 없는 내용은 명시하세요.
+- 사실 중심으로 답변하세요.
+"""
+        elif focus >= 40:
+            base_prompt += """[중요 지침]
+- 프로젝트 내용과 일반 지식을 균형있게 활용하세요.
+- 창의적이되 사실에 기반하세요.
+"""
+        else:
+            base_prompt += """[중요 지침]
+- 자유롭게 창의적으로 답변하세요.
+- 프로젝트는 참고만 하세요.
+"""
+        
+        return base_prompt
+    
+    @staticmethod
+    def _build_general_message(user_message: str, conversation_history: List[Dict]) -> str:
+        """일반 대화 메시지 구성"""
+        
+        message_parts = []
+        
+        # 최근 대화 5턴
+        if conversation_history:
+            message_parts.append("=== 최근 대화 ===")
+            for msg in conversation_history[-10:]:  # 10개 = 5턴
+                role = "J님" if msg['role'] == 'user' else "AI"
+                message_parts.append(f"{role}: {msg['content']}")
+            message_parts.append("\n=== 현재 질문 ===")
+        
+        message_parts.append(f"J님: {user_message}")
+        
+        return "\n".join(message_parts)
+    
+    @staticmethod
+    def _build_project_message(
+        user_message: str,
+        conversation_history: List[Dict],
+        project_db_context: str,
+        weights: Dict
+    ) -> str:
+        """프로젝트 모드 메시지 구성"""
+        
+        message_parts = []
+        
+        # 1. 대화 맥락 (가중치에 따라 양 조절)
+        if conversation_history and weights['conversation'] > 0:
+            message_parts.append(f"=== 대화 맥락 (가중치: {weights['conversation']}%) ===")
+            # 가중치에 비례해서 턴 수 조절
+            turns = max(2, int(weights['conversation'] / 10))
+            for msg in conversation_history[-(turns*2):]:
+                role = "J님" if msg['role'] == 'user' else "AI"
+                message_parts.append(f"{role}: {msg['content']}")
+            message_parts.append("")
+        
+        # 2. 프로젝트 DB 맥락 (가중치에 따라 양 조절)
+        if project_db_context and weights['project'] > 0:
+            message_parts.append(f"=== 프로젝트 DB (가중치: {weights['project']}%) ===")
+            # 가중치가 높으면 전체, 낮으면 일부만
+            if weights['project'] >= 50:
+                message_parts.append(project_db_context)
+            else:
+                # 가중치 낮으면 요약본만 (첫 500자)
+                message_parts.append(project_db_context[:500] + "...")
+            message_parts.append("")
+        
+        # 3. 일반 지식 활용 안내
+        if weights['general'] >= 30:
+            message_parts.append(f"=== 일반 지식 활용 (가중치: {weights['general']}%) ===")
+            message_parts.append("일반 상식과 지식도 자유롭게 활용하세요.")
+            message_parts.append("")
+        
+        # 4. 현재 질문
+        message_parts.append("=== 현재 질문 ===")
+        message_parts.append(f"J님: {user_message}")
+        
+        return "\n".join(message_parts)

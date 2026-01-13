@@ -75,18 +75,55 @@ JNext/
 
 ---
 
-## 📌 현재 진행 중인 작업 (2026-01-12)
+## 📌 최근 완료 작업 (2026-01-13)
 
-### 문제: Hino Review 페이지 카드 호버 효과
+### ✅ JNext v2 - 동적 맥락 관리 시스템 완성!
+**작업 기간**: 2026-01-13 퇴근 후 2시간
+
+**핵심 구현**:
+1. **ContextManager** (동적 맥락 관리자)
+   - 슬라이더(0-100) → AI 집중도 실시간 조절
+   - 가중치 자동 계산: 대화(15%) + 프로젝트(15-85%) + 일반(나머지)
+   - Temperature 자동 조절: 0.7(창의) ↔ 0.2(정확)
+
+2. **ProjectManager** (프로젝트 관리 싱글톤)
+   - 플러그인 방식 프로젝트 추가
+   - BaseProject → HinoBalanceProject
+   - 새 프로젝트 추가 시 기존 코드 수정 불필요
+
+3. **모바일 앱 v2 업데이트**
+   - 슬라이더 UI: 💭(창의) ⚖️(균형) 🎯(정확)
+   - 프로젝트 선택: 하이노밸런스
+   - AI 모델: 젠시/젠/진/클로
+
+**새로운 파일**:
+- `backend/api/core/context_manager.py` - 핵심 로직
+- `backend/api/projects/base.py` - 프로젝트 베이스 클래스
+- `backend/api/projects/hinobalance.py` - 하이노밸런스 설정
+- `backend/api/projects/project_manager.py` - 프로젝트 관리자
+- `backend/api/views_v2.py` - v2 API 엔드포인트
+- `backend/templates/chat_v2.html` - v2 웹 UI
+- `HINO_CATEGORY_STRUCTURE.md` - 카테고리 = 앱 메뉴 자동화 문서
+
+**UI 개선 (2차)**:
+- 프로젝트 선택 통합: 대화/하이노밸런스/모의고사앱/JBody/JFaceAge/JStyle
+- 단일 드롭다운으로 간소화
+- 빈 값('') = 대화 모드, 나머지 = 프로젝트 모드
+
+**URL 추가**:
+- `/chat/v2/` - JNext v2 웹 UI
+- `/api/v2/chat/` - v2 채팅 API
+- `/api/v2/save-raw/` - RAW 저장
+- `/api/v2/test/` - 컨텍스트 매니저 테스트
+
+---
+
+### 과거 작업 (2026-01-12)
+
+#### Hino Review 페이지 카드 호버 효과 수정
 **파일**: `backend/templates/hino_review.html`
 
-**증상**:
-- Contents 탭과 Raw 탭에서 stat-card 클릭 시:
-  - 클릭한 카드만 남고 다른 카드 사라짐
-  - 카드가 커 보이는 현상
-- Draft 탭은 정상 작동
-
-**원인 (분석 완료)**:
+**원인**:
 ```javascript
 // ❌ Content/Raw 탭 문제
 function displayContentStats(data) {

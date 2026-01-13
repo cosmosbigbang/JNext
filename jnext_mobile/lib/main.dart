@@ -42,13 +42,14 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final List<ChatMessage> _messages = [];
   // 로컬 서버 (PC IP 사용 - 같은 WiFi 필수)
-  final String _apiUrl = 'http://192.168.219.139:8000/api/v1/chat/';
+  final String _apiUrl = 'http://192.168.219.139:8000/api/v2/chat/';
   // Render 서버 (외부 접속용)
-  // final String _apiUrl = 'https://jnext.onrender.com/api/v1/chat/';
+  // final String _apiUrl = 'https://jnext.onrender.com/api/v2/chat/';
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
-  String _mode = 'hybrid'; // 기본값: 통합 모드 (DB + 현재 분석)
-  String _model = 'gemini-flash'; // 기본값: 젠 (Gemini Flash)
+  String _project = 'hino'; // 기본값: 하이노밸런스 (빈 문자열이면 대화 모드)
+  String _model = 'gemini-flash'; // 기본값: 젠시 (Gemini Flash)
+  double _focus = 50.0; // 기본값: 균형 (0-100)
 
   Future<void> _sendMessage() async {
     final message = _messageController.text.trim();
@@ -80,7 +81,12 @@ class _ChatScreenState extends State<ChatScreen> {
       final response = await http.post(
         Uri.parse(_apiUrl),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'message': message, 'mode': _mode, 'model': _model}),
+        body: jsonEncode({
+          'message': message, 
+          'project': _project.isEmpty ? null : _project, 
+          'model': _model,
+          'focus': _focus.toInt(),
+        }),
       ).timeout(
         const Duration(seconds: 60),
         onTimeout: () {
@@ -159,7 +165,7 @@ class _ChatScreenState extends State<ChatScreen> {
       
       setState(() {
         _messages.add(ChatMessage(
-          text: '❌ 연결 실패\n\n$errorDetail\n\n📍 서버 주소: $_apiUrl\n📋 모드: $_mode\n\n✅ 확인사항:\n1. 터미널에서 Django 서버 실행 중?\n   (python manage.py runserver)\n2. PC IP가 192.168.219.139 맞나요?\n   (ipconfig 확인)\n3. 방화벽에서 8000 포트 허용?',
+          text: '❌ 연결 실패\n\n$errorDetail\n\n📍 서버 주소: $_apiUrl\n� 프로젝트: ${_project.isEmpty ? '대화' : _project}\n🎯 집중도: ${_focus.toInt()}\n\n✅ 확인사항:\n1. 터미널에서 Django 서버 실행 중?\n   (python manage.py runserver 0.0.0.0:8000)\n2. PC IP가 192.168.219.139 맞나요?\n   (ipconfig 확인)\n3. 방화벽에서 8000 포트 허용?',
           isUser: false,
           timestamp: DateTime.now(),
         ));
@@ -168,7 +174,7 @@ class _ChatScreenState extends State<ChatScreen> {
       
       // 콘솔에 상세 에러 출력
       print('[JNext Error] $_apiUrl');
-      print('[JNext Error] Mode: $_mode');
+      print('[JNext Error] Project: ${_project.isEmpty ? 'chat' : _project}, Focus: ${_focus.toInt()}');
       print('[JNext Error] Exception: $e');
     }
   }
@@ -377,65 +383,61 @@ class _ChatScreenState extends State<ChatScreen> {
         title: Row(
           children: [
             const Text(
-              'JNext AI',
+              'JNext v2',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(width: 12),
-            // 3개 모드 선택 칩
+            // 프로젝트 선택
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: _mode == 'organize' 
-                    ? Colors.blue.shade300 
-                    : _mode == 'hybrid' 
-                      ? Colors.green.shade300 
-                      : Colors.purple.shade300,
+                  color: Colors.green.shade300,
                   width: 1.5,
                 ),
               ),
               child: DropdownButton<String>(
-                value: _mode,
+                value: _project,
                 underline: Container(),
                 isDense: true,
-                icon: Icon(
-                  Icons.arrow_drop_down,
-                  size: 14,
-                  color: _mode == 'organize' 
-                    ? Colors.blue.shade700 
-                    : _mode == 'hybrid' 
-                      ? Colors.green.shade700 
-                      : Colors.purple.shade700,
-                ),
+                icon: Icon(Icons.arrow_drop_down, size: 14, color: Colors.green.shade700),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: _mode == 'organize' 
-                    ? Colors.blue.shade700 
-                    : _mode == 'hybrid' 
-                      ? Colors.green.shade700 
-                      : Colors.purple.shade700,
+                  color: Colors.green.shade700,
                 ),
                 items: const [
                   DropdownMenuItem(
-                    value: 'organize',
-                    child: Text('DB', style: TextStyle(fontSize: 11)),
-                  ),
-                  DropdownMenuItem(
-                    value: 'hybrid',
-                    child: Text('통합', style: TextStyle(fontSize: 11)),
-                  ),
-                  DropdownMenuItem(
-                    value: 'analysis',
+                    value: '',
                     child: Text('대화', style: TextStyle(fontSize: 11)),
+                  ),
+                  DropdownMenuItem(
+                    value: 'hino',
+                    child: Text('하이노', style: TextStyle(fontSize: 11)),
+                  ),
+                  DropdownMenuItem(
+                    value: 'exam',
+                    child: Text('모의고사', style: TextStyle(fontSize: 11)),
+                  ),
+                  DropdownMenuItem(
+                    value: 'jbody',
+                    child: Text('JBody', style: TextStyle(fontSize: 11)),
+                  ),
+                  DropdownMenuItem(
+                    value: 'jfaceage',
+                    child: Text('JFaceAge', style: TextStyle(fontSize: 11)),
+                  ),
+                  DropdownMenuItem(
+                    value: 'jstyle',
+                    child: Text('JStyle', style: TextStyle(fontSize: 11)),
                   ),
                 ],
                 onChanged: (String? newValue) {
                   if (newValue != null) {
                     setState(() {
-                      _mode = newValue;
+                      _project = newValue;
                     });
                   }
                 },
@@ -466,15 +468,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 items: const [
                   DropdownMenuItem(
                     value: 'gemini-flash',
-                    child: Text('젠', style: TextStyle(fontSize: 11)),
+                    child: Text('젠시', style: TextStyle(fontSize: 11)),
                   ),
                   DropdownMenuItem(
                     value: 'gemini-pro',
-                    child: Text('젠시', style: TextStyle(fontSize: 11)),
+                    child: Text('젠', style: TextStyle(fontSize: 11)),
                   ),
                   DropdownMenuItem(
                     value: 'gpt',
                     child: Text('진', style: TextStyle(fontSize: 11)),
+                  ),
+                  DropdownMenuItem(
+                    value: 'claude',
+                    child: Text('클로', style: TextStyle(fontSize: 11)),
                   ),
                 ],
                 onChanged: (String? newValue) {
@@ -519,52 +525,91 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ],
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      maxLines: 5,
-                      minLines: 1,
-                      keyboardType: TextInputType.multiline,
-                      decoration: InputDecoration(
-                        hintText: '메시지를 입력하세요...',
-                        filled: true,
-                        fillColor: Colors.grey[100],
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                        prefixIcon: const Icon(Icons.chat_bubble_outline),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.keyboard_hide),
-                          onPressed: () => FocusScope.of(context).unfocus(),
-                          tooltip: '키보드 내리기',
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          maxLines: 5,
+                          minLines: 1,
+                          keyboardType: TextInputType.multiline,
+                          decoration: InputDecoration(
+                            hintText: '메시지를 입력하세요...',
+                            filled: true,
+                            fillColor: Colors.grey[100],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                            prefixIcon: const Icon(Icons.chat_bubble_outline),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.keyboard_hide),
+                              onPressed: () => FocusScope.of(context).unfocus(),
+                              tooltip: '키보드 내리기',
+                            ),
+                          ),
+                          onSubmitted: (_) => _sendMessage(),
+                          textInputAction: TextInputAction.newline,
                         ),
                       ),
-                      onSubmitted: (_) => _sendMessage(),
-                      textInputAction: TextInputAction.newline,
-                    ),
+                      const SizedBox(width: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Theme.of(context).colorScheme.primary,
+                              Theme.of(context).colorScheme.secondary,
+                            ],
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.send, color: Colors.white),
+                          onPressed: _isLoading ? null : _sendMessage,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Theme.of(context).colorScheme.primary,
-                          Theme.of(context).colorScheme.secondary,
-                        ],
+                  const SizedBox(height: 8),
+                  // 슬라이더 추가
+                  Row(
+                    children: [
+                      const SizedBox(width: 12),
+                      const Text('💭', style: TextStyle(fontSize: 12)),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Slider(
+                          value: _focus,
+                          min: 0,
+                          max: 100,
+                          divisions: 20,
+                          label: '${_focus.toInt()}',
+                          onChanged: (value) {
+                            setState(() {
+                              _focus = value;
+                            });
+                          },
+                        ),
                       ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.send, color: Colors.white),
-                      onPressed: _isLoading ? null : _sendMessage,
-                    ),
+                      const SizedBox(width: 4),
+                      const Text('🎯', style: TextStyle(fontSize: 12)),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${_focus.toInt()}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepPurple,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
                   ),
                 ],
               ),

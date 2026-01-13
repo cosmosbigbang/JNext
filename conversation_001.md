@@ -769,3 +769,201 @@ venv\Scripts\python.exe check_chat_history.py
 **J님 마지막 말씀**: "클로 수고 많았어 ㅎㅎㅎ 내가 확인해봐야하는데.. 출근해야해서 ㅎㅎㅎ"
 
 **기록 업데이트**: 2026-01-13 오전 (chat_history 버그 수정, 모바일 모달 로딩 개선)
+
+---
+
+## 2026-01-13 (월요일) - 퇴근 후 세션
+
+### 🚀 JNext v2 시스템 완성!
+
+**시간**: 퇴근 후 2시간  
+**컨텍스트**: 백업 중 클로 다운 → 재시작 후 작업 재개
+
+#### 핵심 완성 사항
+
+**1. 동적 맥락 관리 시스템 (ContextManager)**
+```python
+# 슬라이더 값(0-100) → 가중치 자동 계산
+focus = 50  # 균형
+→ conversation: 15%
+→ project: 50%
+→ general: 35%
+→ temperature: 0.45
+
+focus = 100  # 프로젝트 전문가
+→ conversation: 15%
+→ project: 85%
+→ general: 0%
+→ temperature: 0.2
+```
+
+**핵심 기능**:
+- 슬라이더 하나로 AI 성격 완전 변경
+- 창의적(0) ↔ 정확(100) 실시간 조절
+- 프로젝트 DB 활용도 자동 조절
+
+**2. 프로젝트 독립 관리 (ProjectManager)**
+```python
+# 플러그인 방식 - 새 프로젝트 추가 초간단
+class HinoBalanceProject(BaseProject):
+    project_id = "hino"
+    display_name = "하이노밸런스"
+    
+    def get_system_prompt(self):
+        return """당신은 하이노밸런스 전문 AI..."""
+    
+    def get_db_context(self, limit=50):
+        # hino_final → hino_draft → hino_raw 우선순위
+        return db_context
+
+# 등록
+project_manager.register_project(HinoBalanceProject())
+```
+
+**이점**:
+- 새 프로젝트 추가 시 기존 코드 0% 수정
+- ExamNavi, 블로그 등 무한 확장 가능
+
+**3. 모바일 앱 v2 UI**
+- 슬라이더: 💭 창의 (0) ⚖️ 균형 (50) 🎯 정확 (100)
+- 프로젝트 선택: 하이노밸런스 (향후 확장)
+- AI 모델: 젠시/젠/진/클로
+- 실시간 가중치 표시 패널
+
+**4. 웹 UI (chat_v2.html)**
+- 2패널 레이아웃: 채팅 + 컨텍스트 정보
+- 실시간 가중치 시각화 (프로그레스 바)
+- RAW 저장 모달
+
+#### 파일 구조 변화
+
+**신규 파일** (13개):
+```
+backend/api/
+├── core/
+│   ├── __init__.py
+│   └── context_manager.py      # 🔥 핵심!
+├── projects/
+│   ├── __init__.py
+│   ├── base.py                 # 프로젝트 베이스
+│   ├── hinobalance.py          # 하이노밸런스 설정
+│   └── project_manager.py      # 싱글톤 관리자
+└── views_v2.py                 # v2 API
+
+backend/templates/
+└── chat_v2.html                # v2 웹 UI
+
+루트/
+├── HINO_CATEGORY_STRUCTURE.md  # 카테고리 = 앱 메뉴 문서
+└── .github/
+    └── copilot-instructions.md # AI 에이전트용
+```
+
+**수정 파일**:
+- `backend/config/urls.py` - v2 URL 추가
+- `jnext_mobile/lib/main.dart` - v2 API 연동
+
+#### URL 구조
+
+```python
+# JNext v2
+path('chat/v2/', views_v2.chat_v2_ui)           # 웹 UI
+path('api/v2/chat/', views_v2.chat_v2)          # 채팅 API
+path('api/v2/save-raw/', views_v2.save_to_raw_v2)  # RAW 저장
+path('api/v2/test/', views_v2.test_context_manager)  # 테스트
+```
+
+#### 테스트 결과
+
+**슬라이더 테스트**:
+- Focus 0: 대화 15% | 프로젝트 15% | 일반 70% | Temp 0.70 ✅
+- Focus 50: 대화 15% | 프로젝트 50% | 일반 35% | Temp 0.45 ✅
+- Focus 100: 대화 15% | 프로젝트 85% | 일반 0% | Temp 0.20 ✅
+
+**프로젝트 로드 테스트**:
+- HinoBalanceProject 등록 완료 ✅
+- DB 컨텍스트 로드 (hino_final → draft → raw) ✅
+- 시스템 프롬프트 생성 ✅
+
+**모바일 앱 연동**:
+- 로컬 서버: `http://192.168.219.139:8000/api/v2/chat/` ✅
+- 슬라이더 → 서버 전송 ✅
+- 응답 표시 ✅
+
+---
+
+### 🎯 다음 작업
+
+**우선순위 P0** (내일 출근 전):
+- [ ] Render 서버 배포 (JNext v2)
+- [ ] 로컬 테스트 (웹 UI + 모바일)
+
+**우선순위 P1**:
+- [ ] Firestore 컬렉션 마이그레이션 (보류 - v2가 우선)
+- [ ] ExamNavi 프로젝트 추가 (v2 시스템 검증)
+
+**완료된 작업**:
+- ✅ JNext v2 핵심 시스템 구현
+- ✅ 동적 맥락 관리 (ContextManager)
+- ✅ 프로젝트 독립 관리 (ProjectManager)
+- ✅ 모바일 앱 v2 UI
+- ✅ 웹 UI v2
+- ✅ 문서화 (HINO_CATEGORY_STRUCTURE.md)
+
+---
+
+**기록 업데이트**: 2026-01-13 퇴근 후 (JNext v2 완성!)
+
+---
+
+### 🎨 UI 개선 - 프로젝트 선택 통합
+
+**시간**: 퇴근 후 추가 작업  
+**컨텍스트**: J님 피드백 반영
+
+#### 문제 인식
+**J님**: "모드선택이 대화모드와 상위컬렉션 선택 모드여야하는데.. 조만간 많은 컬렉션(프로젝트)가 생길건데"
+
+#### 변경 사항
+
+**변경 전**:
+```
+[모드] 대화 모드 | 프로젝트 모드
+[프로젝트] 하이노밸런스 (프로젝트 모드일 때만 표시)
+```
+
+**변경 후**:
+```
+[프로젝트] 💬 대화 | 🏃 하이노밸런스 | 📝 모의고사앱 | 💪 JBody | 👤 JFaceAge | 👔 JStyle
+```
+
+#### 구현
+
+1. **단일 선택박스로 통합**
+   - 대화(빈 값) = 일반 대화 모드
+   - 프로젝트 선택 = 해당 프로젝트 DB 활용
+
+2. **확장성**
+   - 새 프로젝트 추가 시 option 하나만 추가
+   - 자동으로 드롭다운에 표시
+
+3. **향후 프로젝트**:
+   - 모의고사앱 (`exam`)
+   - JBody (`jbody`)
+   - JFaceAge (`jfaceage`)
+   - JStyle (`jstyle`)
+
+#### 수정 파일
+- ✅ `backend/templates/chat_v2.html`
+- ✅ `jnext_mobile/lib/main.dart`
+
+#### 다음 작업
+**우선순위 P0**:
+- [ ] 로컬 웹 테스트 (J님 확인)
+- [ ] Render 배포
+
+---
+
+**J님 마지막 말씀**: "클로 잘했어.. 내가 이따가 정리할게. 내가 좀 쉬다가 있다가 다시 재개하자 클로"
+
+**기록 업데이트**: 2026-01-13 퇴근 후 (프로젝트 선택 통합 완료)

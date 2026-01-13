@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from api import views
+from api import views_v2  # JNext v2
 
 urlpatterns = [
     path('', views.index, name='index'),
@@ -59,4 +60,12 @@ urlpatterns = [
     path('api/v1/hino/review/content/', views.hino_review_content, name='hino_review_content'),
     path('api/v1/hino/review/raw/', views.hino_review_raw, name='hino_review_raw'),
     path('api/v1/hino/detail/', views.hino_get_detail, name='hino_get_detail'),
+    
+    # ============================================
+    # JNext v2 - 동적 맥락 관리 시스템
+    # ============================================
+    path('chat/v2/', views_v2.chat_v2_ui, name='chat_v2_ui'),
+    path('api/v2/chat/', views_v2.chat_v2, name='chat_v2'),
+    path('api/v2/save-raw/', views_v2.save_to_raw_v2, name='save_raw_v2'),
+    path('api/v2/test/', views_v2.test_context_manager, name='test_context'),
 ]
