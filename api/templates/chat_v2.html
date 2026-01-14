@@ -57,6 +57,27 @@
             font-size: 24px;
             font-weight: 600;
             margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 13px;
+            text-decoration: none;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255,255,255,0.35);
+            transform: translateY(-2px);
         }
 
         .controls {
@@ -121,26 +142,40 @@
             padding: 15px;
             background: rgba(255,255,255,0.15);
             border-radius: 12px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .slider-section {
+            flex: 1;
         }
 
         .slider-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }
 
         .slider-label {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
         }
 
         .slider-value {
-            font-size: 20px;
+            font-size: 16px;
             font-weight: 700;
             background: rgba(255,255,255,0.3);
-            padding: 4px 12px;
-            border-radius: 15px;
+            padding: 2px 10px;
+            border-radius: 12px;
+        }
+
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 10px;
+            opacity: 0.9;
         }
 
         .slider-container {
@@ -244,10 +279,11 @@
             font-size: 15px;
             outline: none;
             transition: border 0.3s;
-            resize: none;
+            resize: vertical;
             font-family: inherit;
             line-height: 1.5;
-            max-height: 150px;
+            min-height: 80px;
+            max-height: 200px;
             overflow-y: auto;
         }
 
@@ -494,7 +530,10 @@
         <!-- 왼쪽: 메인 채팅 영역 -->
         <div class="main-chat">
             <div class="header">
-                <h1>🚀 JNext v2 - 동적 컨텍스트 시스템</h1>
+                <h1>
+                    <span>🚀 JNext v2 - 동적 컨텍스트 시스템</span>
+                    <a href="/documents" class="nav-btn">📄 문서 관리</a>
+                </h1>
                 <div class="controls">
                     <div class="control-group">
                         <span class="control-label">프로젝트:</span>
@@ -515,26 +554,26 @@
                     </div>
                 </div>
                 
-                <!-- 슬라이더 컨트롤 (2개) -->
+                <!-- 슬라이더 컨트롤 (좌우 배치) -->
                 <div class="slider-control" id="slider-control">
                     <!-- Temperature 슬라이더 -->
                     <div class="slider-section">
                         <div class="slider-header">
-                            <span class="slider-label">🎨 창의성 (Temperature)</span>
+                            <span class="slider-label">🎨 창의성</span>
                             <span class="slider-value" id="temp-value">0.85</span>
                         </div>
                         <div class="slider-container">
                             <input type="range" min="0" max="100" value="85" class="temp-slider" id="temp-slider">
                         </div>
                         <div class="slider-labels">
-                            <span>📐 정확 (0.0)</span>
-                            <span>⚖️ 균형 (0.5)</span>
-                            <span>💡 창의 (1.0)</span>
+                            <span>📐 정확</span>
+                            <span>⚖️ 균형</span>
+                            <span>💡 창의</span>
                         </div>
                     </div>
                     
                     <!-- DB 사용률 슬라이더 -->
-                    <div class="slider-section" style="margin-top: 20px;">
+                    <div class="slider-section">
                         <div class="slider-header">
                             <span class="slider-label">🎯 DB 사용률</span>
                             <span class="slider-value" id="db-value">25%</span>
@@ -543,9 +582,9 @@
                             <input type="range" min="0" max="100" value="25" class="db-slider" id="db-slider">
                         </div>
                         <div class="slider-labels">
-                            <span>💭 최소 (0%)</span>
-                            <span>⚖️ 균형 (50%)</span>
-                            <span>📚 최대 (100%)</span>
+                            <span>💭 최소</span>
+                            <span>⚖️ 균형</span>
+                            <span>📚 최대</span>
                         </div>
                     </div>
                 </div>
@@ -702,6 +741,28 @@
         </div>
     </div>
 
+    <!-- 프로젝트 생성 모달 -->
+    <div id="project-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-project">&times;</span>
+            <h2>➕ 새 프로젝트 생성</h2>
+            <div class="form-group">
+                <label>프로젝트 ID (영문소문자+언더스코어):</label>
+                <input type="text" id="project-id" placeholder="예: my_project">
+                <small>영문 소문자와 언더스코어(_)만 사용 가능</small>
+            </div>
+            <div class="form-group">
+                <label>프로젝트 이름:</label>
+                <input type="text" id="project-name" placeholder="예: 내 프로젝트">
+            </div>
+            <div class="form-group">
+                <label>설명 (선택사항):</label>
+                <textarea id="project-desc" rows="3" placeholder="프로젝트에 대한 간단한 설명"></textarea>
+            </div>
+            <button id="confirm-project-btn" class="btn-primary">✅ 생성하기</button>
+        </div>
+    </div>
+
     <script>
         // 전역 변수
         let conversationHistory = [];
@@ -720,6 +781,14 @@
         const saveModal = document.getElementById('save-modal');
         const closeModal = document.querySelector('.close');
         const confirmSaveBtn = document.getElementById('confirm-save-btn');
+        
+        // 프로젝트 생성 모달 요소
+        const projectModal = document.getElementById('project-modal');
+        const closeProjectModal = document.querySelector('.close-project');
+        const confirmProjectBtn = document.getElementById('confirm-project-btn');
+        const projectIdInput = document.getElementById('project-id');
+        const projectNameInput = document.getElementById('project-name');
+        const projectDescInput = document.getElementById('project-desc');
 
         // 슬라이더 값 업데이트
         if (focusSlider) {
@@ -974,42 +1043,74 @@
                 }
             });
         }
-        // 새 프로젝트 생성
+        // 새 프로젝트 생성 버튼
         if (newProjectBtn) {
-            newProjectBtn.addEventListener('click', async () => {
-                const projectId = prompt('프로젝트 ID를 입력하세요 (영문소문자+언더스코어):\n예: my_project');
-                if (!projectId) return;
+            newProjectBtn.addEventListener('click', () => {
+                projectModal.style.display = 'block';
+                projectIdInput.value = '';
+                projectNameInput.value = '';
+                projectDescInput.value = '';
+                projectIdInput.focus();
+            });
+        }
 
-            const displayName = prompt('프로젝트 이름을 입력하세요:\n예: 내 프로젝트');
-            if (!displayName) return;
+        // 프로젝트 모달 닫기
+        if (closeProjectModal) {
+            closeProjectModal.addEventListener('click', () => {
+                projectModal.style.display = 'none';
+            });
+        }
 
-            const description = prompt('프로젝트 설명 (선택사항):') || '';
+        // 프로젝트 생성 확인
+        if (confirmProjectBtn) {
+            confirmProjectBtn.addEventListener('click', async () => {
+                const projectId = projectIdInput.value.trim();
+                const displayName = projectNameInput.value.trim();
+                const description = projectDescInput.value.trim();
 
-            try {
-                const response = await fetch('/api/v2/projects/create/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        project_id: projectId,
-                        display_name: displayName,
-                        description: description
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.status === 'success') {
-                    alert('✅ ' + data.message);
-                    // 프로젝트 목록 새로고침
-                    await loadProjects();
-                    // 새로 만든 프로젝트 선택
-                    projectSelect.value = projectId;
-                } else {
-                    alert('❌ ' + data.message);
+                if (!projectId || !displayName) {
+                    alert('프로젝트 ID와 이름은 필수입니다.');
+                    return;
                 }
-            } catch (error) {
-                alert('프로젝트 생성 오류: ' + error.message);
-            }
+
+                // ID 검증
+                if (!/^[a-z_]+$/.test(projectId)) {
+                    alert('프로젝트 ID는 영문 소문자와 언더스코어(_)만 사용 가능합니다.');
+                    return;
+                }
+
+                confirmProjectBtn.disabled = true;
+                confirmProjectBtn.textContent = '생성 중...';
+
+                try {
+                    const response = await fetch('/api/v2/projects/create/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            project_id: projectId,
+                            display_name: displayName,
+                            description: description
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.status === 'success') {
+                        alert('✅ 프로젝트 생성 완료!\n' + data.message);
+                        projectModal.style.display = 'none';
+                        // 프로젝트 목록 새로고침
+                        await loadProjects();
+                        // 새로 만든 프로젝트 선택
+                        projectSelect.value = projectId;
+                    } else {
+                        alert('❌ 실패: ' + data.message);
+                    }
+                } catch (error) {
+                    alert('❌ 프로젝트 생성 오류: ' + error.message);
+                } finally {
+                    confirmProjectBtn.disabled = false;
+                    confirmProjectBtn.textContent = '✅ 생성하기';
+                }
             });
         }
 
