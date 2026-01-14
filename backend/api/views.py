@@ -251,10 +251,7 @@ def load_chat_history(limit=20):
     try:
         db = firestore.client()
         # 문서 ID 역순 정렬 (최신 메시지가 먼저)
-        docs = db.collection('chat_history').order_by(
-            firestore.firestore.FieldPath.document_id(),
-            direction=firestore.firestore.Query.DESCENDING
-        ).limit(limit).stream()
+        docs = db.collection('chat_history').limit(limit).stream()
         
         history = []
         for doc in docs:

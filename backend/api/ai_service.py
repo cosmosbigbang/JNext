@@ -262,6 +262,13 @@ def _call_gemini(full_message, system_prompt, model_key='gemini-pro', temperatur
         # Google GenAI SDK 호출
         from google.genai import types
         
+        print("="*80)
+        print(f"🔍 [DEBUG] _call_gemini 실행 시작")
+        print(f"   model_key: {model_key}")
+        print(f"   model: {model}")
+        print(f"   temperature: {temperature}")
+        print("="*80)
+        
         response = client.models.generate_content(
             model=model,
             contents=full_message,
@@ -273,6 +280,9 @@ def _call_gemini(full_message, system_prompt, model_key='gemini-pro', temperatur
                 responseSchema=settings.AI_RESPONSE_SCHEMA,
             )
         )
+        
+        print(f"✅ [DEBUG] Gemini 응답 성공")
+        print("="*80)
         
         # JSON 파싱
         result = json.loads(response.text)

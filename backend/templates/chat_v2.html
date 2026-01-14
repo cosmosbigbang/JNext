@@ -722,11 +722,13 @@
         const confirmSaveBtn = document.getElementById('confirm-save-btn');
 
         // 슬라이더 값 업데이트
-        focusSlider.addEventListener('input', function() {
-            const value = this.value;
-            focusValue.textContent = value;
-            updateContextWeights(value);
-        });
+        if (focusSlider) {
+            focusSlider.addEventListener('input', function() {
+                const value = this.value;
+                focusValue.textContent = value;
+                updateContextWeights(value);
+            });
+        }
 
         // 컨텍스트 가중치 업데이트
         function updateContextWeights(focus) {
@@ -904,9 +906,11 @@
             saveModal.style.display = 'block';
         });
 
-        closeModal.addEventListener('click', function() {
-            saveModal.style.display = 'none';
-        });
+        if (closeModal) {
+            closeModal.addEventListener('click', function() {
+                saveModal.style.display = 'none';
+            });
+        }
 
         window.addEventListener('click', function(event) {
             if (event.target === saveModal) {
@@ -962,16 +966,19 @@
         });
 
         // Enter 키 전송
-        messageInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
+        if (messageInput) {
+            messageInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        }
         // 새 프로젝트 생성
-        newProjectBtn.addEventListener('click', async () => {
-            const projectId = prompt('프로젝트 ID를 입력하세요 (영문소문자+언더스코어):\n예: my_project');
-            if (!projectId) return;
+        if (newProjectBtn) {
+            newProjectBtn.addEventListener('click', async () => {
+                const projectId = prompt('프로젝트 ID를 입력하세요 (영문소문자+언더스코어):\n예: my_project');
+                if (!projectId) return;
 
             const displayName = prompt('프로젝트 이름을 입력하세요:\n예: 내 프로젝트');
             if (!displayName) return;
@@ -1003,7 +1010,8 @@
             } catch (error) {
                 alert('프로젝트 생성 오류: ' + error.message);
             }
-        });
+            });
+        }
 
         // 프로젝트 목록 로드
         async function loadProjects() {
@@ -1030,7 +1038,9 @@
 
         // 페이지 로드 시 프로젝트 목록 로드
         loadProjects();
-        sendButton.addEventListener('click', sendMessage);
+        if (sendButton) {
+            sendButton.addEventListener('click', sendMessage);
+        }
 
         // 초기 가중치 설정
         updateContextWeights(50);
