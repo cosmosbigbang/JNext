@@ -632,8 +632,8 @@
                         <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; font-size: 13px; margin-top: 5px; line-height: 1.6;">${currentContent || '기존 내용 없음'}</div>
                     </div>
                     <div>
-                        <strong>✨ 새 AI 응답:</strong>
-                        <div id="new-content-preview" style="background: #e7f3ff; padding: 10px; border-radius: 5px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; font-size: 13px; margin-top: 5px; line-height: 1.6; border-left: 3px solid #007bff;">${newContent}</div>
+                        <strong>✨ 새 AI 응답 (수정 가능):</strong>
+                        <textarea id="new-content-editable" style="width: 100%; background: #e7f3ff; padding: 10px; border-radius: 5px; height: 400px; white-space: pre-wrap; font-size: 13px; margin-top: 5px; line-height: 1.6; border: 2px solid #007bff; font-family: inherit; resize: vertical;">${newContent}</textarea>
                     </div>
                 </div>
                 
@@ -652,15 +652,15 @@
                     <button onclick="viewDocument(${index})" style="background: #6c757d;">❌ 취소</button>
                 </div>
             `;
-            
-            // 새 내용 저장 (apply에서 사용)
-            window.currentRegeneratedContent = newContent;
         }
         
         // 재생성 적용
         async function applyRegeneration(index, useFeedback) {
             const doc = allDocuments[index];
             const feedback = document.getElementById('regeneration-feedback').value.trim();
+            
+            // 수정된 내용 가져오기 (textarea에서)
+            const editedContent = document.getElementById('new-content-editable').value;
             
             if (useFeedback && !feedback) {
                 alert('❌ 피드백을 입력해주세요');
@@ -680,7 +680,7 @@
                         project: selectedProject,
                         collection: doc.collection,
                         doc_id: doc.id,
-                        new_content: window.currentRegeneratedContent,
+                        new_content: editedContent,  // 수정된 내용 사용
                         feedback: useFeedback ? feedback : ''
                     })
                 });
