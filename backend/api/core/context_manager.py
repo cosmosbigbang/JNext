@@ -11,7 +11,8 @@ class ContextManager:
     
     @staticmethod
     def build_context(
-        focus: int,
+        temperature: float,
+        db_focus: int,
         project_id: Optional[str],
         user_message: str,
         conversation_history: List[Dict],
@@ -19,10 +20,11 @@ class ContextManager:
         project_prompt: str = ""
     ) -> Dict:
         """
-        슬라이더 값에 따라 맥락 구성
+        슬라이더 2개 값에 따라 맥락 구성
         
         Args:
-            focus: 프로젝트 집중도 (0-100)
+            temperature: AI 창의성 (0.0-1.0)
+            db_focus: DB 사용률 (0-100)
             project_id: 프로젝트 ID (None이면 일반 대화)
             user_message: 사용자 질문
             conversation_history: 대화 기록
@@ -38,28 +40,34 @@ class ContextManager:
             }
         """
         
-        # 일반 대화 모드
+        # 일반 대화 모드 (RAW 단계 - 아이디어 증폭)
         if not project_id:
+            # 대화 모드도 슬라이더 적용 (DB 조절)
+            weights = ContextManager._calculate_weights(db_focus)
+            
             return {
-                'system_prompt': "당신은 J님의 창의적 파트너 AI입니다. J님을 '사용자'가 아닌 'J님'이라고 호칭하세요. 존댓말을 사용하고 자연스럽게 대화하세요.",
+                'system_prompt': """당신은 J님의 창의적 파트너 AI입니다. J님의 아이디어를 1차 증폭하여 RAW 데이터를 생성하는 역할입니다.
+
+핵심 원칙:
+- J님을 '사용자'가 아닌 'J님'이라고 호칭하세요
+- 존댓말을 사용하고 창의적으로 대화하세요
+- 대화 맥락을 철저히 유지하세요 (이전 대화에서 언급된 프로젝트/주제를 기억)
+- 근거 없는 추측이나 거짓 정보는 절대 제공하지 마세요
+- 확실하지 않은 내용은 "확실하지 않지만..." 또는 "추측하자면..."으로 명시하세요
+- 구체적이고 실용적인 개선안을 제시하세요 (일반론 지양)""",
                 'full_message': ContextManager._build_general_message(user_message, conversation_history),
-                'temperature': 0.7,
-                'weights': {
-                    'conversation': 60,
-                    'project': 0,
-                    'general': 40
-                }
+                'temperature': temperature,  # 슬라이더에서 받은 값 사용
+                'weights': weights  # DB 슬라이더로 조절
             }
         
         # 프로젝트 모드 - 가중치 계산
-        weights = ContextManager._calculate_weights(focus)
-        temperature = ContextManager._calculate_temperature(focus)
+        weights = ContextManager._calculate_weights(db_focus)
         
         # 시스템 프롬프트 구성
         system_prompt = ContextManager._build_system_prompt(
             project_prompt, 
             weights,
-            focus
+            db_focus
         )
         
         # 전체 메시지 구성
@@ -73,7 +81,7 @@ class ContextManager:
         return {
             'system_prompt': system_prompt,
             'full_message': full_message,
-            'temperature': temperature,
+            'temperature': temperature,  # 슬라이더에서 받은 값 사용
             'weights': weights
         }
     

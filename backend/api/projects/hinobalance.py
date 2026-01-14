@@ -10,7 +10,7 @@ from firebase_admin import firestore
 class HinoBalanceProject(BaseProject):
     """하이노밸런스 프로젝트"""
     
-    project_id = "hino"
+    project_id = "hinobalance"  # hino → hinobalance 변경
     display_name = "하이노밸런스"
     description = "J님의 하이노밸런스 운동 이론 및 실전 관리"
     
@@ -126,12 +126,13 @@ J님이 개발한 혁신적인 운동 이론 및 실전 프로그램입니다.
         db = firestore.client()
         contents = []
         
-        # 우선순위: 최종 → 초안 → 원본
-        collections = ['hino_final', 'hino_draft', 'hino_raw']
+        # 우선순위: 최종 → 초안 → 원본 (상하위)
+        collections = ['final', 'draft', 'raw']
         
-        for collection_name in collections:
+        for subcollection in collections:
             try:
-                query = db.collection(collection_name)
+                # 상하위 구조
+                query = db.collection('projects').document(self.project_id).collection(subcollection)
                 
                 # 카테고리 필터링
                 if subcategory:
@@ -140,7 +141,7 @@ J님이 개발한 혁신적인 운동 이론 및 실전 프로그램입니다.
                     # 메인 카테고리로 필터 (실전 → 하이노* 운동들)
                     if category == '실전':
                         for exercise in self.exercise_categories:
-                            sub_query = db.collection(collection_name).where('카테고리', '==', exercise).limit(limit)
+                            sub_query = db.collection('projects').document(self.project_id).collection(subcollection).where('카테고리', '==', exercise).limit(limit)
                             for doc in sub_query.stream():
                                 data = doc.to_dict()
                                 contents.append({
@@ -148,7 +149,7 @@ J님이 개발한 혁신적인 운동 이론 및 실전 프로그램입니다.
                                     'category': data.get('카테고리'),
                                     'title': data.get('제목') or data.get('title'),
                                     'content': data.get('전체글') or data.get('내용') or data.get('content'),
-                                    'source': collection_name
+                                    'source': f"projects/{self.project_id}/{subcollection}"
                                 })
                         continue
                     else:
@@ -163,14 +164,14 @@ J님이 개발한 혁신적인 운동 이론 및 실전 프로그램입니다.
                         'category': data.get('카테고리'),
                         'title': data.get('제목') or data.get('title'),
                         'content': data.get('전체글') or data.get('내용') or data.get('content'),
-                        'source': collection_name
+                        'source': f"projects/{self.project_id}/{subcollection}"
                     })
                 
                 if len(contents) >= limit:
                     break
                     
             except Exception as e:
-                print(f"[HinoBalance] Error querying {collection_name}: {e}")
+                print(f"[HinoBalance] Error querying projects/{self.project_id}/{subcollection}: {e}")
                 continue
         
         return contents[:limit]
@@ -190,16 +191,17 @@ J님이 개발한 혁신적인 운동 이론 및 실전 프로그램입니다.
         db = firestore.client()
         
         context_parts = []
-        # 우선순위 순서: 최종 → 초안 → 원본
+        # 우선순위 순서: 최종 → 초안 → 원본 (상하위 구조)
         collections = [
-            ('hino_final', '최종본'),
-            ('hino_draft', '초안'),
-            ('hino_raw', '원본')
+            ('final', '최종본'),
+            ('draft', '초안'),
+            ('raw', '원본')
         ]
         
-        for collection_name, label in collections:
+        for subcollection, label in collections:
             try:
-                query = db.collection(collection_name)
+                # 상하위 구조: projects/hinobalance/{subcollection}
+                query = db.collection('projects').document(self.project_id).collection(subcollection)
                 
                 # 카테고리 필터 적용 (옵션)
                 if category:
@@ -238,10 +240,10 @@ J님이 개발한 혁신적인 운동 이론 및 실전 프로그램입니다.
                     context_parts.append(doc_context)
                 
                 if doc_count > 0:
-                    print(f"[HinoBalance] Loaded {doc_count} docs from {collection_name}")
+                    print(f"[HinoBalance] Loaded {doc_count} docs from projects/{self.project_id}/{subcollection}")
                     
             except Exception as e:
-                print(f"[HinoBalance] Error loading {collection_name}: {e}")
+                print(f"[HinoBalance] Error loading projects/{self.project_id}/{subcollection}: {e}")
                 continue
         
         if not context_parts:

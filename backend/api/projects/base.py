@@ -37,16 +37,16 @@ class BaseProject(ABC):
     
     def get_collection_name(self, stage: str) -> str:
         """
-        Firestore 컬렉션 이름 반환
+        Firestore 컬렉션 이름 반환 (Hierarchical 구조)
         
         Args:
             stage: 'raw', 'draft', 'final'
             
         Returns:
-            str: 컬렉션 이름 (예: "hino_raw")
+            str: 서브컬렉션 이름 (예: "raw", "draft", "final")
         """
-        collection_suffix = self.collections.get(stage, stage)
-        return f"{self.project_id}_{collection_suffix}"
+        # projects/{project_id}/{subcollection} 구조를 위해 subcollection 이름만 반환
+        return self.collections.get(stage, stage)
     
     def get_field_name(self, english_key: str) -> str:
         """영문 키를 프로젝트별 필드명으로 변환"""

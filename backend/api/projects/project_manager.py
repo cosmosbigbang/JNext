@@ -48,7 +48,7 @@ class ProjectManager:
     
     def get_default_project(self) -> Optional[BaseProject]:
         """기본 프로젝트 반환 (하이노밸런스)"""
-        return self._projects.get('hino')
+        return self._projects.get('hinobalance')
 
 
 # 싱글톤 인스턴스 생성

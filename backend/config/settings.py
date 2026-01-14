@@ -271,11 +271,11 @@ AI_MODELS = {
 DEFAULT_AI_MODEL = 'gemini-pro'
 
 # ============================================================
-# JNext 컬렉션 구조 (3단계)
+# JNext 컬렉션 구조 (3단계) - Hierarchical Structure
 # ============================================================
-COLLECTION_RAW = "hino_raw"      # RAW: 원본/아이디어
-COLLECTION_DRAFT = "hino_draft"  # DRAFT: 정리 중
-COLLECTION_FINAL = "hino_final"  # FINAL: 최종 배포
+COLLECTION_RAW = "raw"      # RAW: 원본/아이디어 (projects/{project_id}/raw)
+COLLECTION_DRAFT = "draft"  # DRAFT: 정리 중 (projects/{project_id}/draft)
+COLLECTION_FINAL = "final"  # FINAL: 최종 배포 (projects/{project_id}/final)
 
 # Firestore 필드 스키마 (한글 필드명)
 DOCUMENT_FIELDS = {

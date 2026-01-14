@@ -482,8 +482,8 @@
                     <div class="control-group">
                         <span class="control-label">프로젝트:</span>
                         <select id="project-select" class="project-select">
-                            <option value="">💬 대화</option>
-                            <option value="hino" selected>🏃 하이노밸런스</option>
+                            <option value="" selected>💬 대화</option>
+                            <option value="hinobalance">🏃 하이노밸런스</option>
                             <option value="exam">📝 모의고사앱</option>
                             <option value="jbody">💪 JBody</option>
                             <option value="jfaceage">👤 JFaceAge</option>
@@ -493,27 +493,46 @@
                     <div class="control-group">
                         <span class="control-label">모델:</span>
                         <select id="model-select" class="model-select">
-                            <option value="gemini-pro">⚡ 젠 (정확)</option>
-                            <option value="gemini-flash" selected>🚀 젠시 (빠름)</option>
+                            <option value="gemini-pro" selected>⚡ 젠 (정확)</option>
+                            <option value="gemini-flash">🚀 젠시 (빠름)</option>
                             <option value="gpt">💡 진 (창의)</option>
                             <option value="claude">👑 클로 (코딩)</option>
                         </select>
                     </div>
                 </div>
                 
-                <!-- 슬라이더 컨트롤 -->
-                <div class="slider-control">
-                    <div class="slider-header">
-                        <span class="slider-label">🎯 프로젝트 컨텍스트 집중도</span>
-                        <span class="slider-value" id="focus-value">50</span>
+                <!-- 슬라이더 컨트롤 (2개) -->
+                <div class="slider-control" id="slider-control">
+                    <!-- Temperature 슬라이더 -->
+                    <div class="slider-section">
+                        <div class="slider-header">
+                            <span class="slider-label">🎨 창의성 (Temperature)</span>
+                            <span class="slider-value" id="temp-value">0.85</span>
+                        </div>
+                        <div class="slider-container">
+                            <input type="range" min="0" max="100" value="85" class="temp-slider" id="temp-slider">
+                        </div>
+                        <div class="slider-labels">
+                            <span>📐 정확 (0.0)</span>
+                            <span>⚖️ 균형 (0.5)</span>
+                            <span>💡 창의 (1.0)</span>
+                        </div>
                     </div>
-                    <div class="slider-container">
-                        <input type="range" min="0" max="100" value="50" class="focus-slider" id="focus-slider">
-                    </div>
-                    <div class="slider-labels">
-                        <span>💭 창의적 (0)</span>
-                        <span>⚖️ 균형 (50)</span>
-                        <span>🎯 정확 (100)</span>
+                    
+                    <!-- DB 사용률 슬라이더 -->
+                    <div class="slider-section" style="margin-top: 20px;">
+                        <div class="slider-header">
+                            <span class="slider-label">🎯 DB 사용률</span>
+                            <span class="slider-value" id="db-value">25%</span>
+                        </div>
+                        <div class="slider-container">
+                            <input type="range" min="0" max="100" value="25" class="db-slider" id="db-slider">
+                        </div>
+                        <div class="slider-labels">
+                            <span>💭 최소 (0%)</span>
+                            <span>⚖️ 균형 (50%)</span>
+                            <span>📚 최대 (100%)</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -715,16 +734,62 @@
             document.getElementById('bar-general').style.width = general + '%';
         }
 
-        // 프로젝트 변경 시 배지 업데이트
+        // 프로젝트 변경 시 배지 업데이트 및 DB 슬라이더 자동 조정
         projectSelect.addEventListener('change', function() {
             const projectName = this.options[this.selectedIndex].text;
+            const projectValue = this.value;
             document.getElementById('current-project').textContent = projectName;
+            
+            // DB 슬라이더만 자동 조정 (Temperature는 유지)
+            const dbSlider = document.getElementById('db-slider');
+            if (projectValue) {
+                // 프로젝트 모드: 50%
+                dbSlider.value = 50;
+                document.getElementById('db-value').textContent = '50%';
+            } else {
+                // 대화 모드: 25%
+                dbSlider.value = 25;
+                document.getElementById('db-value').textContent = '25%';
+            }
+            
+            // 가중치 업데이트
+            updateContextWeights(dbSlider.value);
         });
 
         modelSelect.addEventListener('change', function() {
             const modelText = this.options[this.selectedIndex].text;
             const modelName = modelText.split(' ')[1]; // "⚡ 젠 (정확)" -> "젠"
             document.getElementById('current-model').textContent = modelName;
+        });
+
+        // 페이지 로드 시 초기화
+        window.addEventListener('DOMContentLoaded', function() {
+            // Temperature 슬라이더 초기화
+            const tempSlider = document.getElementById('temp-slider');
+            tempSlider.value = 85;
+            document.getElementById('temp-value').textContent = '0.85';
+            
+            // DB 슬라이더 초기화 (대화 모드 기본값: 25%)
+            const dbSlider = document.getElementById('db-slider');
+            dbSlider.value = 25;
+            document.getElementById('db-value').textContent = '25%';
+            updateContextWeights(25);
+            
+            // Temperature 슬라이더 이벤트
+            tempSlider.addEventListener('input', function() {
+                const tempValue = (this.value / 100).toFixed(2);
+                document.getElementById('temp-value').textContent = tempValue;
+            });
+            
+            // DB 슬라이더 이벤트
+            dbSlider.addEventListener('input', function() {
+                document.getElementById('db-value').textContent = this.value + '%';
+                updateContextWeights(this.value);
+            });
+            
+            // 초기 프로젝트 이름 설정
+            document.getElementById('current-project').textContent = '💬 대화';
+            document.getElementById('current-model').textContent = '젠';
         });
 
         // 메시지 전송
@@ -734,7 +799,10 @@
 
             const model = modelSelect.value;
             const project = projectSelect.value || null;
-            const focus = parseInt(focusSlider.value);
+            const tempSlider = document.getElementById('temp-slider');
+            const dbSlider = document.getElementById('db-slider');
+            const temperature = parseFloat((tempSlider.value / 100).toFixed(2));
+            const db_focus = parseInt(dbSlider.value);
 
             // 사용자 메시지 추가
             addMessage('user', message);
@@ -753,7 +821,8 @@
                         message: message,
                         model: model,
                         project: project,
-                        focus: focus
+                        temperature: temperature,
+                        db_focus: db_focus
                     })
                 });
 
@@ -764,8 +833,13 @@
                 if (data.error) {
                     addMessage('ai', '❌ 오류: ' + data.error);
                 } else {
-                    addMessage('ai', data.response);
-                    lastAiResponse = data.response;
+                    // 응답 텍스트 추출 (객체인 경우 answer 필드 사용)
+                    const responseText = typeof data.response === 'object' 
+                        ? (data.response.answer || JSON.stringify(data.response))
+                        : data.response;
+                    
+                    addMessage('ai', responseText);
+                    lastAiResponse = responseText;
 
                     // 최근 응답 정보 업데이트
                     document.getElementById('last-response-info').style.display = 'block';
@@ -776,7 +850,7 @@
                     // 대화 기록 추가
                     conversationHistory.push({
                         user: message,
-                        ai: data.response,
+                        ai: responseText,
                         timestamp: new Date().toISOString()
                     });
                 }
@@ -795,7 +869,10 @@
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+            
+            // content가 문자열이 아니면 변환
+            const contentStr = String(content || '');
+            contentDiv.innerHTML = contentStr.replace(/\n/g, '<br>');
             
             messageDiv.appendChild(contentDiv);
             chatArea.appendChild(messageDiv);

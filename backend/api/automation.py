@@ -31,7 +31,7 @@ class HinoAutomation:
             생성된 문서 ID 리스트
         """
         # 1. Firestore에서 해당 카테고리 문서 수집
-        docs = self.db.collection('hino_raw').where('category', '==', category).stream()
+        docs = self.db.collection('projects').document('hinobalance').collection('raw').where('category', '==', category).stream()
         
         combined_content = ""
         doc_count = 0
@@ -54,8 +54,8 @@ class HinoAutomation:
                 content = combined_content
                 doc_id = f"{output_name}_전체"
             
-            # 3. hino_draft에 저장
-            self.db.collection('hino_draft').document(doc_id).set({
+            # 3. projects/hinobalance/draft에 저장
+            self.db.collection('projects').document('hinobalance').collection('draft').document(doc_id).set({
                 'exercise_name': doc_id,
                 'title': f"{output_name} ({version})",
                 'content': content,
@@ -109,9 +109,9 @@ class HinoAutomation:
         
         response = self.model.generate_content(prompt)
         
-        # hino_draft에 저장
-        doc_id = f"{category}_공통이론"
-        self.db.collection('hino_draft').document(doc_id).set({
+        # projects/hinobalance/draft에 저장
+        doc_id = f"{category}_이론"
+        self.db.collection('projects').document('hinobalance').collection('draft').document(doc_id).set({
             'exercise_name': doc_id,
             'title': f"{category} 공통 이론",
             'content': response.text,
@@ -133,7 +133,7 @@ class HinoAutomation:
             exercise_name: '하이노워밍벤치' 등
         """
         # hino_raw에서 원본 가져오기
-        docs = self.db.collection('hino_raw').where('exercise_name', '==', exercise_name).stream()
+        docs = self.db.collection('projects').document('hinobalance').collection('raw').where('exercise_name', '==', exercise_name).stream()
         
         for doc in docs:
             data = doc.to_dict()
@@ -169,8 +169,8 @@ class HinoAutomation:
             
             response = self.model.generate_content(prompt)
             
-            # hino_draft에 저장
-            self.db.collection('hino_draft').document(exercise_name).set({
+            # projects/hinobalance/draft에 저장
+            self.db.collection('projects').document('hinobalance').collection('draft').document(exercise_name).set({
                 'exercise_name': exercise_name,
                 'title': data.get('title'),
                 'content': response.text,
@@ -195,7 +195,7 @@ class HinoAutomation:
             scene_type: 'home', 'office', 'street' 등
         """
         # 운동 정보 가져오기
-        doc = self.db.collection('hino_draft').document(exercise_name).get()
+        doc = self.db.collection('projects').document('hinobalance').collection('draft').document(exercise_name).get()
         if not doc.exists:
             return None
         
@@ -228,9 +228,9 @@ J: (대사)
         
         response = self.model.generate_content(prompt)
         
-        # hino_draft에 시트콤 추가
+        # projects/hinobalance/draft에 시트콤 추가
         sitcom_id = f"{exercise_name}_시트콤"
-        self.db.collection('hino_draft').document(sitcom_id).set({
+        self.db.collection('projects').document('hinobalance').collection('draft').document(sitcom_id).set({
             'exercise_name': exercise_name,
             'title': f"{exercise_name} 시트콤",
             'content': response.text,

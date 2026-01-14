@@ -28,7 +28,7 @@ def hino_review_draft(request):
         content_type = request.GET.get('type', None)
         category = request.GET.get('category', None)
         
-        query = db.collection('hino_draft')
+        query = db.collection('projects').document('hinobalance').collection('draft')
         
         # 필터링
         if content_type:
@@ -118,7 +118,7 @@ def hino_review_raw(request):
         db = firestore.client()
         category = request.GET.get('category', None)
         
-        query = db.collection('hino_raw')
+        query = db.collection('projects').document('hinobalance').collection('raw')
         
         if category:
             query = query.where('category', '==', category)
@@ -156,7 +156,7 @@ def hino_get_detail(request):
         return JsonResponse({'error': 'GET method required'}, status=405)
     
     try:
-        collection = request.GET.get('collection', 'hino_draft')
+        collection = request.GET.get('collection', 'draft')  # subcollection 이름
         doc_id = request.GET.get('id')
         
         if not doc_id:
@@ -198,32 +198,49 @@ conversation_history = []
 MAX_HISTORY = 10
 
 
-def save_chat_history(role, content, mode, model):
+def save_chat_history(role, content, mode, model, temperature=0.85, db_focus=25, project_context=None):
     """
-    대화 기록을 Firestore에 저장
+    대화 기록을 Firestore에 저장 (확장된 필드)
+    문서 ID: YYYYMMDD_HHMMSS_microseconds (역순 정렬 가능)
     
     Args:
         role: 'user' | 'assistant'
         content: 메시지 내용 (전체 저장)
-        mode: organize | hybrid | analysis
-        model: gemini-flash | gemini-pro | gpt
+        mode: v2 | organize | hybrid
+        model: gemini-flash | gemini-pro | claude | gpt
+        temperature: AI 창의성 (0.0-1.0)
+        db_focus: DB 사용률 (0-100)
+        project_context: 프로젝트 ID (None이면 일반 대화)
     """
     try:
         db = firestore.client()
-        db.collection('chat_history').add({
+        now = now_kst()
+        timestamp = now.strftime('%Y%m%d_%H%M%S_%f')
+        doc_id = f"{timestamp}"
+        
+        doc_data = {
             '역할': role,
-            '내용': content,  # 전체 저장 (제한 없음)
-            '시간': now_kst(),
+            '내용': content,
+            '시간': now,
             '모드': mode,
-            '모델': model
-        })
+            '모델': model,
+            'temperature': temperature,
+            'db_focus': db_focus,
+            'project_context': project_context,
+            'raw_분석_완료': False
+        }
+        
+        db.collection('chat_history').document(doc_id).set(doc_data)
+        return doc_id  # ID 반환 (RAW 저장 시 참조용)
     except Exception as e:
         print(f"[대화 저장 실패] {str(e)}")
+        return None
 
 
 def load_chat_history(limit=20):
     """
     Firestore에서 최근 대화 기록 조회
+    문서 ID 기반 역순 정렬 (최신이 먼저)
     
     Args:
         limit: 최근 몇 개 메시지 (기본 20개 = 10턴)
@@ -233,30 +250,21 @@ def load_chat_history(limit=20):
     """
     try:
         db = firestore.client()
-        # Firestore 인덱스 없이 전체 조회 후 Python에서 정렬
-        docs = db.collection('chat_history').stream()
-        
-        # 시간 기준 내림차순 정렬 (최신순)
-        all_docs = []
-        for doc in docs:
-            data = doc.to_dict()
-            data['_id'] = doc.id
-            all_docs.append(data)
-        
-        # 시간순 정렬 (최신 → 오래된)
-        sorted_docs = sorted(all_docs, key=lambda x: x.get('시간', ''), reverse=True)
-        
-        # 최근 limit개만 선택
-        recent_docs = sorted_docs[:limit]
+        # 문서 ID 역순 정렬 (최신 메시지가 먼저)
+        docs = db.collection('chat_history').order_by(
+            firestore.firestore.FieldPath.document_id(),
+            direction=firestore.firestore.Query.DESCENDING
+        ).limit(limit).stream()
         
         history = []
-        for data in recent_docs:
+        for doc in docs:
+            data = doc.to_dict()
             history.append({
                 'role': data.get('역할', 'user'),
                 'content': data.get('내용', '')  # 전체 조회 (제한 없음)
             })
         
-        # 시간 역순으로 정렬 (오래된 것부터)
+        # 시간 역순으로 정렬 (오래된 것부터 - AI 컨텍스트용)
         return list(reversed(history))
     except Exception as e:
         print(f"[대화 로드 실패] {str(e)}")
@@ -1286,10 +1294,11 @@ def chat(request):
             print(f"[DELETE] 원본 메시지: {user_message}")
             print(f"[DELETE] 추출된 키워드: '{keywords}'")
             
-            # 모든 컬렉션에서 제목 검색
+            # 모든 컬렉션에서 제목 검색 (hierarchical)
             found_docs = []
-            for collection_name in ['hino_raw', 'hino_draft', 'hino_final']:
-                docs = db.collection(collection_name).stream()
+            subcollections = ['raw', 'draft', 'final']
+            for subcol in subcollections:
+                docs = db.collection('projects').document('hinobalance').collection(subcol).stream()
                 for doc in docs:
                     data = doc.to_dict()
                     title = data.get('제목', '')
@@ -1303,7 +1312,7 @@ def chat(request):
                         found_docs.append({
                             'id': doc.id,
                             'title': title,
-                            'collection': collection_name,
+                            'collection': f'projects/hinobalance/{subcol}',
                             'category': data.get('카테고리', ''),
                             'preview': data.get('내용', '')[:100] + '...'
                         })
@@ -1397,17 +1406,17 @@ def chat(request):
             exclude_kw = params.get('exclude_keywords', [])
             mode_type = params.get('mode', 'final')  # 'final' or 'draft'
             
-            # 문서 검색
+            # 문서 검색 (hierarchical)
             db = firestore.client()
-            collections = ['hino_draft', 'hino_raw']  # draft와 raw에서 검색
+            subcollections = ['draft', 'raw']  # draft와 raw에서 검색
             
             all_docs = []
-            for col_name in collections:
-                docs = db.collection(col_name).stream()
+            for subcol in subcollections:
+                docs = db.collection('projects').document('hinobalance').collection(subcol).stream()
                 for doc in docs:
                     doc_data = doc.to_dict()
                     doc_data['_id'] = doc.id
-                    doc_data['_collection'] = col_name
+                    doc_data['_collection'] = f'projects/hinobalance/{subcol}'
                     
                     # 필터링
                     if category and doc_data.get('카테고리') != category:
@@ -1485,8 +1494,8 @@ JSON 형식:
             generated_content = result.get('전체글', '')
             summary = generated_content[:500] + '...' if len(generated_content) > 500 else generated_content
             
-            # 저장
-            target_collection = 'hino_final' if mode_type == 'final' else 'hino_draft'
+            # 저장 (hierarchical)
+            subcol = 'final' if mode_type == 'final' else 'draft'
             final_doc_data = {
                 '제목': generated_title,
                 '카테고리': category or '기타',
@@ -1648,7 +1657,7 @@ def save_summary(request):
         title = data.get('title', '제목 없음')
         category = data.get('category', '기타')
         content = data.get('content', '')
-        collection = data.get('collection', 'hino_draft')
+        collection = data.get('collection', 'draft')  # subcollection 이름 (draft/raw/final)
         original_message = data.get('original_message', '')
         ai_response = data.get('ai_response', {})
         
@@ -1665,10 +1674,10 @@ def save_summary(request):
         # Firestore 초기화
         db = firestore.client()
         
-        # 데이터 상태 결정
-        if collection == 'hino_raw':
+        # 데이터 상태 결정 (subcollection에서)
+        if collection == 'raw':
             data_state = 'RAW'
-        elif collection == 'hino_draft':
+        elif collection == 'draft':
             data_state = 'DRAFT'
         else:  # hino_final
             data_state = 'FINAL'
@@ -1707,7 +1716,7 @@ def save_summary(request):
             doc_data['밈캐릭터'] = meme_character
         
         # FINAL 단계에서만 실제 이미지 생성
-        if collection == 'hino_final' and (meme_top or meme_bottom):
+        if collection == 'final' and (meme_top or meme_bottom):
             try:
                 # 밈 생성 (시트콤 캐릭터 이미지 사용)
                 meme_gen = MemeGenerator()
@@ -1945,14 +1954,14 @@ JSON 형식:
             '종류': '최종본'
         }
         
-        final_ref = db.collection('hino_final').add(final_doc_data)
+        final_ref = db.collection('projects').document('hinobalance').collection('final').add(final_doc_data)
         final_doc_id = final_ref[1].id
         
         return JsonResponse({
             'status': 'success',
             'message': '최종본이 생성되었습니다.',
             'doc_id': final_doc_id,
-            'collection': 'hino_final',
+            'collection': 'projects/hinobalance/final',
             'title': generated_title,
             'source_count': len(source_docs)
         })

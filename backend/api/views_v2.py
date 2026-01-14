@@ -23,7 +23,7 @@ KST = timezone(timedelta(hours=9))
 def chat_v2(request):
     """
     JNext v2 채팅 API
-    동적 맥락 관리 + 슬라이더 기반
+    동적 맥락 관리 + 슬라이더 2개 (Temperature + DB 사용률)
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
@@ -34,18 +34,28 @@ def chat_v2(request):
         user_message = data.get('message', '').strip()
         model = data.get('model', 'gemini-pro')
         project_id = data.get('project', None)  # None = 일반 대화
-        focus = int(data.get('focus', 50))  # 0-100
+        temperature = float(data.get('temperature', 0.85))  # 0.0-1.0
+        db_focus = int(data.get('db_focus', 25))  # 0-100
         
         if not user_message:
             return JsonResponse({'error': 'Message is required'}, status=400)
         
         print(f"\n[JNext v2] User: {user_message}")
         print(f"[JNext v2] Project: {project_id or '일반 대화'}")
-        print(f"[JNext v2] Focus: {focus}%")
+        print(f"[JNext v2] Temperature: {temperature}")
+        print(f"[JNext v2] DB Focus: {db_focus}%")
         print(f"[JNext v2] Model: {model}")
         
-        # 1. 사용자 메시지 즉시 저장 (에러 방지)
-        save_chat_history('user', user_message, 'v2', model)
+        # 1. 사용자 메시지 즉시 저장 (백업)
+        chat_id = save_chat_history(
+            role='user',
+            content=user_message,
+            mode='v2',
+            model=model,
+            temperature=temperature,
+            db_focus=db_focus,
+            project_context=project_id
+        )
         
         # 2. 대화 기록 로드
         conversation_history = load_chat_history(limit=20)
@@ -68,7 +78,8 @@ def chat_v2(request):
         
         # 4. 동적 맥락 구성
         context = ContextManager.build_context(
-            focus=focus,
+            temperature=temperature,
+            db_focus=db_focus,
             project_id=project_id,
             user_message=user_message,
             conversation_history=conversation_history,
@@ -77,7 +88,7 @@ def chat_v2(request):
         )
         
         print(f"[JNext v2] Context weights: {context['weights']}")
-        print(f"[JNext v2] Temperature: {context['temperature']}")
+        print(f"[JNext v2] Using Temperature: {context['temperature']}")
         
         # 5. AI 호출 (재시도 로직 포함)
         ai_response = None
@@ -111,22 +122,64 @@ def chat_v2(request):
         
         # 6. 응답 처리
         if ai_response:
-            save_chat_history('assistant', ai_response.get('answer', ''), 'v2', model)
+            ai_answer = ai_response.get('answer', '')
+            
+            # AI 응답 저장
+            save_chat_history(
+                role='assistant',
+                content=ai_answer,
+                mode='v2',
+                model=model,
+                temperature=temperature,
+                db_focus=db_focus,
+                project_context=project_id
+            )
+            
+            # Phase 3: 프로젝트 대화이면 가치 평가 및 RAW 저장
+            if project_id:
+                try:
+                    from .raw_storage import evaluate_chat_value, analyze_and_save_raw
+                    
+                    # 2단계: 가치 평가 (관대하게)
+                    is_valuable = evaluate_chat_value(user_message, ai_answer)
+                    
+                    if is_valuable:
+                        # 3단계: AI 분석 후 RAW 저장
+                        analyze_and_save_raw(
+                            project_id=project_id,
+                            user_message=user_message,
+                            ai_response=ai_answer,
+                            chat_ref=chat_id,
+                            model=model
+                        )
+                        print(f"[JNext v2] RAW 저장 완료: {project_id}")
+                    else:
+                        print(f"[JNext v2] 잡담으로 판단, RAW 저장 스킵")
+                except Exception as e:
+                    print(f"[JNext v2] RAW 저장 실패: {e}")
             
             return JsonResponse({
                 'status': 'success',
                 'response': ai_response,
                 'context_info': {
                     'project': project.display_name if project else '일반 대화',
-                    'focus': focus,
-                    'weights': context['weights'],
-                    'temperature': context['temperature']
+                    'db_focus': db_focus,
+                    'temperature': temperature,
+                    'weights': context['weights']
                 },
                 'model': model
             })
         else:
             error_msg = f"AI 서비스 일시 중단 중입니다. ({str(error_occurred)[:100]})"
-            save_chat_history('assistant', error_msg, 'v2', model)
+            save_chat_history(
+                role='assistant',
+                content=error_msg,
+                mode='v2',
+                model=model,
+                temperature=temperature,
+                db_focus=db_focus,
+                project_context=project_id
+            )
             
             return JsonResponse({
                 'status': 'error',

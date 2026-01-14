@@ -5,6 +5,7 @@ Phase 6: 의도 분류 (Intent Classification)
 Phase 7: JSON 스키마 검증
 """
 from django.conf import settings
+from google import genai
 import json
 
 
@@ -100,7 +101,7 @@ def classify_intent(user_message):
         # 제외: "저장해서", "저장하고" 등
         if not any(exc in message_lower for exc in ['저장해서', '저장해도', '저장하고', '저장하면']):
             params = {
-                'collection': 'hino_final' if any(k in message_lower for k in ['최종', 'final', '완료']) else 'hino_draft',
+                'collection': 'final' if any(k in message_lower for k in ['최종', 'final', '완료']) else 'draft',
                 'target': 'last_response'
             }
             return {
@@ -144,13 +145,13 @@ def classify_intent(user_message):
     if (has_db or has_category) and any(cmd in message_lower for cmd in ['검색해', '검색해줘', '찾아줘', '가져와', '가져와줘', '조회해', '보여줘', '보여주']):
         params = {'collections': []}
         
-        # 컬렉션 필터링
+        # 컬렉션 필터링 (subcollection 이름만)
         if 'draft' in message_lower or '초안' in message_lower:
-            params['collections'].append('hino_draft')
+            params['collections'].append('draft')
         if 'final' in message_lower or '최종' in message_lower:
-            params['collections'].append('hino_final')
+            params['collections'].append('final')
         if 'raw' in message_lower or '원본' in message_lower:
-            params['collections'].append('hino_raw')
+            params['collections'].append('raw')
         
         # 카테고리 필터링 (하이노밸런스 운동 순서)
         for category in categories:
@@ -258,15 +259,16 @@ def _call_gemini(full_message, system_prompt, model_key='gemini-pro', temperatur
     model = settings.AI_MODELS[model_key]['model']
     
     try:
+        # Google GenAI SDK 호출
         response = client.models.generate_content(
             model=model,
             contents=full_message,
             config={
                 'system_instruction': system_prompt,
-                'temperature': temperature,  # 모드별 temperature 적용
-                'max_output_tokens': 32768,  # ⭐ 긴 문서 출력 가능 (기본 8192 → 32768)
-                'response_mime_type': 'application/json',  # JSON 강제
-                'response_schema': settings.AI_RESPONSE_SCHEMA,  # 스키마 강제
+                'temperature': temperature,
+                'max_output_tokens': 32768,
+                'response_mime_type': 'application/json',
+                'response_schema': settings.AI_RESPONSE_SCHEMA,
             }
         )
         
