@@ -48,7 +48,7 @@ def test_1_dual_sliders():
             "message": f"테스트 메시지 {i}: 슬라이더 파라미터 확인",
             "temperature": case['temperature'],
             "db_focus": case['db_focus'],
-            "model": "gpt"  # GPT로 테스트
+            "model": "gemini-flash"  # Gemini로 테스트
         }
         
         try:

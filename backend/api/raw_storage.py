@@ -54,13 +54,15 @@ AI: {ai_response[:200]}...
 
 답변: yes 또는 no만 출력하세요."""
 
+        from google.genai import types
+        
         response = client.models.generate_content(
             model=model,
             contents=prompt,
-            config={
-                'temperature': 0.2,
-                'max_output_tokens': 100,
-            }
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                maxOutputTokens=100,
+            )
         )
         
         result = response.text.strip().lower()
@@ -113,14 +115,16 @@ AI: {ai_response}
 3. 근거 없는 추측 금지
 4. 확실하지 않으면 "불명확" 명시"""
 
+        from google.genai import types
+        
         response = client.models.generate_content(
             model=gemini_model,
             contents=analysis_prompt,
-            config={
-                'temperature': 0.3,
-                'max_output_tokens': 2048,
-                'response_mime_type': 'application/json'
-            }
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+                maxOutputTokens=2048,
+                responseMimeType='application/json'
+            )
         )
         
         metadata = json.loads(response.text)

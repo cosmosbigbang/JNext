@@ -260,16 +260,18 @@ def _call_gemini(full_message, system_prompt, model_key='gemini-pro', temperatur
     
     try:
         # Google GenAI SDK 호출
+        from google.genai import types
+        
         response = client.models.generate_content(
             model=model,
             contents=full_message,
-            config={
-                'system_instruction': system_prompt,
-                'temperature': temperature,
-                'max_output_tokens': 32768,
-                'response_mime_type': 'application/json',
-                'response_schema': settings.AI_RESPONSE_SCHEMA,
-            }
+            config=types.GenerateContentConfig(
+                systemInstruction=system_prompt,
+                temperature=temperature,
+                maxOutputTokens=32768,
+                responseMimeType='application/json',
+                responseSchema=settings.AI_RESPONSE_SCHEMA,
+            )
         )
         
         # JSON 파싱

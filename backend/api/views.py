@@ -1075,13 +1075,14 @@ def chat(request):
             # Gemini 호출로 출판용 글 생성
             try:
                 import google.genai as genai
+                from google.genai import types
                 client = settings.AI_MODELS['gemini']['client']
                 model = settings.AI_MODELS['gemini']['model']
                 
                 publish_response = client.models.generate_content(
                     model=model,
                     contents=publish_prompt,
-                    config={'temperature': 0.8}  # 창의적 글쓰기
+                    config=types.GenerateContentConfig(temperature=0.8)  # 창의적 글쓰기
                 )
                 
                 full_article = publish_response.text
@@ -1480,13 +1481,14 @@ JSON 형식:
 """
             
             import google.genai as genai
+            from google.genai import types
             client = settings.AI_MODELS['gemini']['client']
             model_name = settings.AI_MODELS['gemini']['model']
             
             synthesis_response = client.models.generate_content(
                 model=model_name,
                 contents=synthesis_prompt,
-                config={'temperature': 0.7, 'response_mime_type': 'application/json'}
+                config=types.GenerateContentConfig(temperature=0.7, responseMimeType='application/json')
             )
             
             result = json.loads(synthesis_response.text)

@@ -289,3 +289,84 @@ def test_context_manager(request):
     return JsonResponse({
         'test_cases': test_cases
     })
+
+
+@csrf_exempt
+def list_projects(request):
+    """
+    프로젝트 목록 조회 API
+    GET /api/v2/projects/
+    """
+    if request.method != 'GET':
+        return JsonResponse({'error': 'GET method required'}, status=405)
+    
+    projects = project_manager.list_projects()
+    
+    return JsonResponse({
+        'status': 'success',
+        'projects': [
+            {'id': pid, 'name': name}
+            for pid, name in projects.items()
+        ]
+    })
+
+
+@csrf_exempt
+def create_project(request):
+    """
+    새 프로젝트 생성 API
+    POST /api/v2/projects/create/
+    
+    Body:
+        - project_id: 프로젝트 ID (영문소문자+언더스코어)
+        - display_name: 표시 이름
+        - description: 설명 (옵션)
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        project_id = data.get('project_id', '').strip()
+        display_name = data.get('display_name', '').strip()
+        description = data.get('description', '').strip()
+        
+        if not project_id or not display_name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'project_id와 display_name은 필수입니다'
+            }, status=400)
+        
+        # ID 유효성 검사 (영문소문자+언더스코어만)
+        import re
+        if not re.match(r'^[a-z_]+$', project_id):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'project_id는 영문 소문자와 언더스코어만 사용 가능합니다'
+            }, status=400)
+        
+        # 프로젝트 생성
+        new_project = project_manager.create_project(
+            project_id=project_id,
+            display_name=display_name,
+            description=description
+        )
+        
+        print(f"[ProjectManager] 새 프로젝트 생성: {project_id} ({display_name})")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'프로젝트 "{display_name}" 생성 완료',
+            'project': {
+                'id': new_project.project_id,
+                'name': new_project.display_name,
+                'description': new_project.description
+            }
+        })
+        
+    except Exception as e:
+        print(f"[프로젝트 생성 실패] {str(e)}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)

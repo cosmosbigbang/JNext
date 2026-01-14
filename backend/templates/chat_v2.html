@@ -98,6 +98,23 @@
             background: rgba(255,255,255,0.3);
         }
 
+        .new-project-btn {
+            background: rgba(255,255,255,0.25);
+            border: 2px dashed rgba(255,255,255,0.5);
+            padding: 6px 12px;
+            border-radius: 20px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 12px;
+        }
+
+        .new-project-btn:hover {
+            background: rgba(255,255,255,0.35);
+            border-color: rgba(255,255,255,0.8);
+        }
+
         /* 슬라이더 컨트롤 */
         .slider-control {
             margin-top: 15px;
@@ -484,11 +501,8 @@
                         <select id="project-select" class="project-select">
                             <option value="" selected>💬 대화</option>
                             <option value="hinobalance">🏃 하이노밸런스</option>
-                            <option value="exam">📝 모의고사앱</option>
-                            <option value="jbody">💪 JBody</option>
-                            <option value="jfaceage">👤 JFaceAge</option>
-                            <option value="jstyle">👔 JStyle</option>
                         </select>
+                        <button id="new-project-btn" class="new-project-btn">+ 새 프로젝트</button>
                     </div>
                     <div class="control-group">
                         <span class="control-label">모델:</span>
@@ -700,6 +714,7 @@
         const focusSlider = document.getElementById('focus-slider');
         const focusValue = document.getElementById('focus-value');
         const projectSelect = document.getElementById('project-select');
+        const newProjectBtn = document.getElementById('new-project-btn');
         const modelSelect = document.getElementById('model-select');
         const saveRawBtn = document.getElementById('save-raw-btn');
         const saveModal = document.getElementById('save-modal');
@@ -953,7 +968,68 @@
                 sendMessage();
             }
         });
+        // 새 프로젝트 생성
+        newProjectBtn.addEventListener('click', async () => {
+            const projectId = prompt('프로젝트 ID를 입력하세요 (영문소문자+언더스코어):\n예: my_project');
+            if (!projectId) return;
 
+            const displayName = prompt('프로젝트 이름을 입력하세요:\n예: 내 프로젝트');
+            if (!displayName) return;
+
+            const description = prompt('프로젝트 설명 (선택사항):') || '';
+
+            try {
+                const response = await fetch('/api/v2/projects/create/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: projectId,
+                        display_name: displayName,
+                        description: description
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    alert('✅ ' + data.message);
+                    // 프로젝트 목록 새로고침
+                    await loadProjects();
+                    // 새로 만든 프로젝트 선택
+                    projectSelect.value = projectId;
+                } else {
+                    alert('❌ ' + data.message);
+                }
+            } catch (error) {
+                alert('프로젝트 생성 오류: ' + error.message);
+            }
+        });
+
+        // 프로젝트 목록 로드
+        async function loadProjects() {
+            try {
+                const response = await fetch('/api/v2/projects/');
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    // 기존 옵션 제거 (대화는 유지)
+                    projectSelect.innerHTML = '<option value="">💬 대화</option>';
+
+                    // 프로젝트 추가
+                    data.projects.forEach(proj => {
+                        const option = document.createElement('option');
+                        option.value = proj.id;
+                        option.textContent = proj.name;
+                        projectSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('프로젝트 목록 로드 실패:', error);
+            }
+        }
+
+        // 페이지 로드 시 프로젝트 목록 로드
+        loadProjects();
         sendButton.addEventListener('click', sendMessage);
 
         // 초기 가중치 설정

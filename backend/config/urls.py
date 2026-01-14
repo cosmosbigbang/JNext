@@ -68,4 +68,8 @@ urlpatterns = [
     path('api/v2/chat/', views_v2.chat_v2, name='chat_v2'),
     path('api/v2/save-raw/', views_v2.save_to_raw_v2, name='save_raw_v2'),
     path('api/v2/test/', views_v2.test_context_manager, name='test_context'),
+    
+    # 프로젝트 관리 API
+    path('api/v2/projects/', views_v2.list_projects, name='list_projects'),
+    path('api/v2/projects/create/', views_v2.create_project, name='create_project'),
 ]
