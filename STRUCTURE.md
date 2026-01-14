@@ -643,7 +643,69 @@ def _initialize_projects(self):
 
 ---
 
-## 📚 참고 자료
+## � 일반적인 문제 및 디버깅 가이드
+
+> **출처**: `claude_guide.md` (젠 작성, 2026-01-14)
+
+### 문제 1: API 수정했는데 반영 안 됨
+
+**증상**: 코드를 수정했는데도 이전처럼 동작  
+**사례**: `GEMINI_API_ISSUE` (2026-01-14 해결)
+
+**원인**: Django 개발 서버가 코드 변경을 감지하지 못하고 메모리에 남은 이전 버전 실행
+
+**해결 절차**:
+1. **프로세스 완전 종료**: `Ctrl+C` → 포트 확인 (`Get-NetTCPConnection -LocalPort 8000`) → 좀비 프로세스 강제 종료 (`Stop-Process -Id <ID> -Force`)
+2. **파이썬 캐시 삭제**: `backend/` 폴더 내 모든 `__pycache__` 디렉토리 삭제
+3. **서버 재시작**: 위 두 단계 후 `python manage.py runserver`
+
+### 문제 2: API가 400 Bad Request 또는 예상치 못한 오류 반환
+
+**원인**: 수정한 코드가 아닌 **옛날 코드**로 요청이 전달됨
+
+**해결 절차 (URL 라우팅 추적)**:
+1. **시작점**: `backend/config/urls.py` → 요청 URL이 어떤 `include()`로 연결되는지 확인
+2. **중간점**: `backend/api/urls.py` → 최종 뷰 함수/클래스 찾기
+3. **종착점**: 해당 뷰 파일 → 최신 로직 호출하는지 확인
+
+**예시**:
+```python
+# config/urls.py
+path('api/v2/chat/', include('api.urls'))
+
+# api/urls.py
+path('chat/', views_v2.chat_v2, name='chat_v2')
+
+# views_v2.py
+def chat_v2(request):
+    return call_ai_model(...)  # ← 이게 정말 ai_service.py 호출하는지 확인!
+```
+
+### 문제 3: 여러 AI 모델 SDK 충돌
+
+**특징**: Gemini, GPT, Claude 등 여러 SDK 사용으로 인한 파라미터 형식 차이
+
+**주요 이슈**:
+- **Gemini**: `config` 파라미터는 dict 아닌 `types.GenerateContentConfig` 객체 사용 (camelCase!)
+  ```python
+  # ❌ 잘못된 방법
+  config={'system_instruction': '...', 'temperature': 0.5}
+  
+  # ✅ 올바른 방법
+  from google.genai import types
+  config=types.GenerateContentConfig(
+      systemInstruction='...',  # camelCase!
+      temperature=0.5,
+      maxOutputTokens=32768,
+      responseMimeType='application/json'
+  )
+  ```
+- **Claude**: `proxies` 인자 관련 오류 (Python 3.14 호환성 이슈)
+- 각 AI 서비스가 올바른 클라이언트와 설정 사용하는지 교차 확인 필수
+
+---
+
+## �📚 참고 자료
 
 ### Django 모범 사례
 - Fat Models, Thin Views
