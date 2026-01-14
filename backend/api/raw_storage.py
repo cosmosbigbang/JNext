@@ -146,12 +146,12 @@ AI: {ai_response}
             'ai_응답': ai_response,
             '정리본': ai_response,  # 일단 원본과 동일, 나중에 정제 로직 추가
             '키워드': metadata.get('키워드', []),
-            '카테고리': metadata.get('카테고리', '기타'),
+            'category': metadata.get('카테고리', '기타'),
             '태그': [],
             '요약': metadata.get('요약', ''),
             'chat_ref': chat_ref,
             'project_id': project_id,
-            '시간': now,
+            'timestamp': now,
             '작성자': 'J님',
             '모델': model
         }

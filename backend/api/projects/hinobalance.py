@@ -136,7 +136,7 @@ J님이 개발한 혁신적인 운동 이론 및 실전 프로그램입니다.
                 
                 # 카테고리 필터링
                 if subcategory:
-                    query = query.where('카테고리', '==', subcategory)
+                    query = query.where('category', '==', subcategory)
                 elif category:
                     # 메인 카테고리로 필터 (실전 → 하이노* 운동들)
                     if category == '실전':
@@ -153,7 +153,7 @@ J님이 개발한 혁신적인 운동 이론 및 실전 프로그램입니다.
                                 })
                         continue
                     else:
-                        query = query.where('카테고리', 'in', self.main_categories.get(category, []))
+                        query = query.where('category', 'in', self.main_categories.get(category, []))
                 
                 docs = query.limit(limit).stream()
                 
@@ -161,7 +161,7 @@ J님이 개발한 혁신적인 운동 이론 및 실전 프로그램입니다.
                     data = doc.to_dict()
                     contents.append({
                         'id': doc.id,
-                        'category': data.get('카테고리'),
+                        'category': data.get('category'),
                         'title': data.get('제목') or data.get('title'),
                         'content': data.get('전체글') or data.get('내용') or data.get('content'),
                         'source': f"projects/{self.project_id}/{subcollection}"
@@ -205,7 +205,10 @@ J님이 개발한 혁신적인 운동 이론 및 실전 프로그램입니다.
                 
                 # 카테고리 필터 적용 (옵션)
                 if category:
-                    query = query.where('카테고리', '==', category)
+                    query = query.where('category', '==', category)
+                
+                # order_by는 모든 문서에 해당 필드가 있어야 하므로 제거
+                # (기존 문서: 시간, 새 문서: timestamp - 혼재 시 에러)
                 
                 docs = query.limit(limit).stream()
                 doc_count = 0
@@ -214,8 +217,8 @@ J님이 개발한 혁신적인 운동 이론 및 실전 프로그램입니다.
                     data = doc.to_dict()
                     doc_count += 1
                     
-                    # 문서 정보 추출 (다양한 필드명 지원)
-                    category = data.get('카테고리') or data.get('category') or 'N/A'
+                    # 문서 정보 추출 (다양한 필드명 지원 - 영문 우선)
+                    category = data.get('category') or data.get('카테고리') or 'N/A'
                     title = data.get('제목') or data.get('title') or 'N/A'
                     
                     # 내용 필드 우선순위: 전체글 > 내용 > content
