@@ -72,4 +72,13 @@ urlpatterns = [
     # 프로젝트 관리 API
     path('api/v2/projects/', views_v2.list_projects, name='list_projects'),
     path('api/v2/projects/create/', views_v2.create_project, name='create_project'),
+    
+    # 문서 관리 API
+    path('documents/', views_v2.document_manager_ui, name='document_manager_ui'),
+    path('api/v2/documents/search/', views_v2.search_documents, name='search_documents'),
+    path('api/v2/documents/update/', views_v2.update_document, name='update_document'),
+    path('api/v2/documents/regenerate/', views_v2.regenerate_document, name='regenerate_document'),
+    path('api/v2/documents/apply-regeneration/', views_v2.apply_regeneration, name='apply_regeneration'),
+    path('api/v2/documents/combine/', views_v2.combine_documents, name='combine_documents'),
+    path('api/v2/documents/delete/', views_v2.delete_documents, name='delete_documents'),
 ]
