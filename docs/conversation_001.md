@@ -987,3 +987,65 @@ path('api/v2/test/', views_v2.test_context_manager)  # 테스트
 **J님 마지막 말씀**: "클로 잘했어.. 내가 이따가 정리할게. 내가 좀 쉬다가 있다가 다시 재개하자 클로"
 
 **기록 업데이트**: 2026-01-13 퇴근 후 (프로젝트 선택 통합 완료)
+
+
+📋 JNext 폴더 구조 개선 - 전체 일정
+🎯 목표 구조
+⏱️ 작업 단계 (총 6단계)
+1단계: 사전 준비 (5분)
+ 서버 종료
+ 현재 상태 백업 (Git tag)
+ 작업 브랜치 생성
+2단계: 폴더 이동 (10분)
+ backend → api/
+ hinobalance_mobile → apps/hinobalance/
+ jnext_mobile → apps/jnext-common/
+ meme_images → assets/meme_images/
+3단계: 스크립트 정리 (10분)
+ api/ 루트의 *.py 스크립트들 → tools/scripts/
+ manage.py, requirements.txt 등은 api/ 유지
+4단계: 경로 수정 (15분)
+ api/config/settings.py - BASE_DIR 경로
+ api/ 내부 임포트 경로
+ .gitmodules (서브모듈 경로)
+ render.yaml (배포 설정)
+5단계: 테스트 (10분)
+ 서버 재시작 테스트
+ API 엔드포인트 동작 확인
+ Gemini 채팅 테스트
+ 프로젝트 생성 기능 테스트
+6단계: 정리 & 백업 (10분)
+ Git 커밋
+ GitHub 푸시
+ 브랜치 병합
+ 구조 문서 업데이트
+⏰ 예상 소요 시간: 약 1시간
+🚨 주의사항
+위험도 높은 작업:
+⚠️ 서브모듈 경로 - .gitmodules 수정 필수
+⚠️ Django BASE_DIR - 경로 틀리면 서버 안 돌아감
+⚠️ 임포트 경로 - Python import 깨질 수 있음
+안전장치:
+✅ Git tag로 복구 지점 생성
+✅ 단계별 커밋으로 언제든 롤백 가능
+✅ 테스트 후 다음 단계 진행
+🎯 시작 전 확인사항
+J님, 다음을 확인해주세요:
+
+서버 종료해도 되나요? (현재 실행 중)
+작업 시작할까요?
+한 번에 진행 vs 단계별 확인?
+어떻게 진행할까요? 😊
+
+모두 진행해 클로
+
+알겠습니다 J님! 바로 시작하겠습니다! 🚀
+
+1단계: 사전 준비
+cd c:\Projects\JNext\backend; Get-Process python | Where-Object {$_.Path -like "*JNext*"} | Stop-Process -Force
+cd c:\Projects\JNext; git tag -a "backup-before-restructure" -m "백업: 폴더 구조 변경 전"; git tag
+✅ 1단계 완료! 이제 폴더 이동하겠습니다.
+
+2단계: 폴더 이동
+git mv backend api
+New-Item -ItemType Directory -Path "apps" -Force; git mv hinobalance_mobile apps/hinobalance; git mv jnext_mobile apps/jnext-common

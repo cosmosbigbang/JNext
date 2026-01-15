@@ -137,6 +137,42 @@ AI: {ai_response}
                 metadata[key] = re.sub(ai_self_refs, '', metadata[key], flags=re.IGNORECASE)
                 metadata[key] = re.sub(r'\s+', ' ', metadata[key]).strip()  # 공백 정리
         
+        # 🔍 품질 검증: 일반론/엉터리 감지
+        quality_issues = []
+        
+        # 1. J님 원본 키워드 누락 체크
+        user_keywords = set(re.findall(r'[\w가-힣]+', user_message.lower()))
+        response_text = ai_response.lower()
+        
+        # J님이 말씀한 핵심 키워드 중 5개 이상 누락 시 경고
+        missing_keywords = [kw for kw in user_keywords if len(kw) > 2 and kw not in response_text]
+        if len(missing_keywords) > 5:
+            quality_issues.append(f"J님 키워드 {len(missing_keywords)}개 누락")
+        
+        # 2. 일반론 키워드 감지
+        generic_phrases = [
+            '일반적으로', '보통', '대체로', '흔히', '전형적으로',
+            '접근성', '비용 효율', '경쟁력', '생존 가능성',
+            '파트너십', '게임 요소', '사용자 경험',
+            '여러 의미', '다양한 해석', '맥락에 따라'
+        ]
+        generic_count = sum(1 for phrase in generic_phrases if phrase in ai_response)
+        if generic_count >= 3:
+            quality_issues.append(f"일반론 키워드 {generic_count}개 감지")
+        
+        # 3. 너무 짧은 답변
+        if len(ai_response) < 200:
+            quality_issues.append("답변 너무 짧음")
+        
+        # 품질 점수 계산 (0~100)
+        quality_score = 100
+        quality_score -= len(missing_keywords) * 2  # 누락 키워드당 -2점
+        quality_score -= generic_count * 10  # 일반론당 -10점
+        if len(ai_response) < 200:
+            quality_score -= 30
+        
+        quality_score = max(0, quality_score)
+        
         # Firestore 저장
         db = firestore.client()
         now = datetime.now(KST)
@@ -157,7 +193,11 @@ AI: {ai_response}
             'project_id': project_id,
             'timestamp': now,
             '작성자': 'J님',
-            '모델': model
+            '모델': model,
+            # 품질 메타데이터
+            '품질점수': quality_score,
+            '품질이슈': quality_issues,
+            '검증필요': quality_score < 60  # 60점 미만이면 J님 검토 필요
         }
         
         # 상하위 구조: projects/{project_id}/raw/{doc_id}

@@ -81,4 +81,8 @@ urlpatterns = [
     path('api/v2/documents/apply-regeneration/', views_v2.apply_regeneration, name='apply_regeneration'),
     path('api/v2/documents/combine/', views_v2.combine_documents, name='combine_documents'),
     path('api/v2/documents/delete/', views_v2.delete_documents, name='delete_documents'),
+    path('api/v2/documents/move-to-final/', views_v2.move_to_final, name='move_to_final'),
+    
+    # 이미지 생성 API
+    path('api/v2/images/generate/', views_v2.generate_image, name='generate_image'),
 ]

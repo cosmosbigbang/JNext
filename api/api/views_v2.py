@@ -395,8 +395,9 @@ def search_documents(request):
         project_id = request.GET.get('project', '').strip()
         collection = request.GET.get('collection', 'raw').strip()
         keyword = request.GET.get('keyword', '').strip()
+        search_type = request.GET.get('search_type', 'all').strip()
         
-        print(f"[검색] project={project_id}, collection={collection}, keyword={keyword}")
+        print(f"[검색] project={project_id}, collection={collection}, keyword={keyword}, search_type={search_type}")
         
         if not project_id:
             return JsonResponse({'error': 'project required'}, status=400)
@@ -445,6 +446,36 @@ def search_documents(request):
                 original = ''
             elif not isinstance(original, str):
                 original = str(original)
+            
+            # 카테고리와 운동명
+            category = data.get('카테고리') or data.get('category') or ''
+            exercise_name = data.get('exercise_name') or data.get('제목') or title or ''
+            keywords = data.get('키워드') or ''
+            
+            # 검색 타입에 따라 필터링
+            if keyword:
+                match = False
+                keyword_lower = keyword.lower()
+                
+                if search_type == 'category':
+                    # 카테고리 검색
+                    match = keyword_lower in category.lower()
+                elif search_type == 'exercise':
+                    # 운동명 검색
+                    match = keyword_lower in exercise_name.lower()
+                elif search_type == 'keyword':
+                    # 키워드 필드 검색
+                    match = keyword_lower in keywords.lower()
+                else:  # 'all'
+                    # 전체 검색 (제목, 내용, 카테고리, 운동명, 키워드)
+                    match = (keyword_lower in title.lower() or 
+                            keyword_lower in content.lower() or
+                            keyword_lower in category.lower() or
+                            keyword_lower in exercise_name.lower() or
+                            keyword_lower in keywords.lower())
+                
+                if not match:
+                    continue
             
             results.append({
                 'id': doc.id,
@@ -935,6 +966,344 @@ def delete_documents(request):
             response_data['message'] += f' ({len(errors)}개 실패)'
         
         return JsonResponse(response_data)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def move_to_final(request):
+    """
+    문서를 FINAL 컬렉션으로 이동 API
+    POST /api/v2/documents/move-to-final/
+    
+    Body:
+        {
+            "project": "hinobalance",
+            "collection": "raw",  # 또는 "draft"
+            "doc_id": "abc123"
+        }
+    """
+    try:
+        data = json.loads(request.body)
+        project_id = data.get('project')
+        source_col = data.get('collection')
+        doc_id = data.get('doc_id')
+        
+        if not all([project_id, source_col, doc_id]):
+            return JsonResponse({'error': 'project, collection, doc_id required'}, status=400)
+        
+        # FINAL로 이미 이동된 문서는 스킵
+        if source_col == 'final':
+            return JsonResponse({'error': '이미 FINAL 컬렉션에 있는 문서입니다.'}, status=400)
+        
+        db = firestore.client()
+        
+        # 1. 원본 문서 가져오기
+        source_ref = db.collection('projects').document(project_id).collection(source_col).document(doc_id)
+        source_doc = source_ref.get()
+        
+        if not source_doc.exists:
+            return JsonResponse({'error': '원본 문서를 찾을 수 없습니다.'}, status=404)
+        
+        doc_data = source_doc.to_dict()
+        
+        # 2. FINAL 스키마 필드 추가 (없으면)
+        if '밈스토리' not in doc_data:
+            doc_data['밈스토리'] = {
+                '훅_0_3초': '',
+                '전개_3_10초': '',
+                '반전_10_15초': '',
+                '클로징_15_20초': ''
+            }
+        
+        if '밈이미지' not in doc_data:
+            doc_data['밈이미지'] = {
+                '프레임1_0초': '',
+                '프레임2_3초': '',
+                '프레임3_10초': '',
+                '프레임4_15초': ''
+            }
+        
+        if '밈자막' not in doc_data:
+            doc_data['밈자막'] = {
+                '상단': '',
+                '중단': '',
+                '하단': ''
+            }
+        
+        if '숏스크립트' not in doc_data:
+            doc_data['숏스크립트'] = ''
+        
+        if '전자책' not in doc_data:
+            doc_data['전자책'] = {
+                '장': '',
+                '절': '',
+                '순서': 0,
+                '타입': '동작'
+            }
+        
+        # 3. FINAL 컬렉션에 복사
+        final_ref = db.collection('projects').document(project_id).collection('final').document(doc_id)
+        final_ref.set(doc_data)
+        
+        # 4. 원본 삭제
+        source_ref.delete()
+        
+        print(f"[FINAL 이동 성공] projects/{project_id}/{source_col}/{doc_id} → final/{doc_id}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'FINAL로 이동되었습니다.',
+            'doc_id': doc_id,
+            'exercise_name': doc_data.get('운동명', 'Unknown')
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def generate_image(request):
+    """
+    AI 이미지 생성 API
+    POST /api/v2/images/generate/
+    
+    Body:
+        {
+            "project": "hinobalance",
+            "doc_id": "abc123",
+            "collection": "final",
+            "prompt": "골반 돌리기 동작 설명 다이어그램",
+            "style": "diagram",  # diagram/illustration/realistic
+            "size": "1024x768"   # 1024x1024/1024x768/768x1024
+        }
+    """
+    try:
+        import os
+        import base64
+        from PIL import Image
+        from io import BytesIO
+        
+        data = json.loads(request.body)
+        project_id = data.get('project')
+        doc_id = data.get('doc_id')
+        collection = data.get('collection')
+        prompt = data.get('prompt', '').strip()
+        style = data.get('style', 'diagram')
+        size = data.get('size', '1024x768')
+        
+        if not all([project_id, doc_id, prompt]):
+            return JsonResponse({'error': 'project, doc_id, prompt required'}, status=400)
+        
+        # 스타일별 프롬프트 보강
+        style_prompts = {
+            'diagram': 'clear educational diagram, clean lines, professional, medical illustration style, labeled, technical drawing',
+            'illustration': 'soft illustration, friendly, approachable, pastel colors, warm tones, cartoon style, welcoming',
+            'realistic': 'photorealistic, high detail, professional photography, studio lighting, sharp focus'
+        }
+        
+        enhanced_prompt = f"{prompt}, {style_prompts.get(style, '')}, high quality, professional, 4k resolution"
+        
+        print(f"[이미지 생성] 프롬프트: {enhanced_prompt}")
+        print(f"[이미지 생성] 크기: {size}")
+        
+        # 1단계: 기존 캐릭터 이미지 스타일 분석 (Gemini Vision - 캐싱)
+        character_style_prompt = ""
+        
+        # 캐시 확인 (메모리 캐싱)
+        cache_key = 'hinobalance_character_style'
+        if not hasattr(generate_image, '_style_cache'):
+            generate_image._style_cache = {}
+        
+        if cache_key in generate_image._style_cache:
+            character_style_prompt = generate_image._style_cache[cache_key]
+            print(f"[캐릭터 스타일] 캐시 사용: {character_style_prompt[:50]}...")
+        else:
+            try:
+                from django.conf import settings
+                from google import genai
+                from pathlib import Path
+                
+                # Gemini API 키
+                gemini_key = getattr(settings, 'GEMINI_API_KEY', None) or os.environ.get('GEMINI_API_KEY')
+                
+                if gemini_key:
+                    # meme_images 폴더 경로
+                    meme_folder = Path(__file__).parent.parent.parent / 'meme_images'
+                    
+                    # J님, 아내 대표 이미지 찾기
+                    j_image = None
+                    
+                    for img_file in meme_folder.glob('*.png'):
+                        if not j_image:
+                            j_image = img_file
+                            break
+                    
+                    # 대표 이미지 1개만 분석 (1회만)
+                    if j_image and j_image.exists():
+                        print(f"[캐릭터 스타일 분석 - 최초 1회] {j_image.name}")
+                        
+                        # Gemini Vision으로 스타일 분석
+                        client = genai.Client(api_key=gemini_key)
+                        
+                        with open(j_image, 'rb') as f:
+                            image_data = f.read()
+                        
+                        # 이미지 분석 요청
+                        vision_response = client.models.generate_content(
+                            model='gemini-2.0-flash-exp',
+                            contents=[
+                                "이 이미지의 캐릭터 스타일을 DALL-E 이미지 생성 프롬프트용으로 간결하게 설명해주세요. (3D/2D, 색감, 얼굴 특징, 의상, 전체 분위기 등을 영어로 50단어 이내)",
+                                image_data
+                            ]
+                        )
+                        
+                        character_style_prompt = vision_response.text.strip()
+                        
+                        # 캐시에 저장 (서버 재시작 전까지 유지)
+                        generate_image._style_cache[cache_key] = character_style_prompt
+                        print(f"[캐릭터 스타일 캐시 저장] {character_style_prompt}")
+                        
+            except Exception as style_error:
+                print(f"[캐릭터 스타일 분석 스킵] {str(style_error)}")
+        
+        # 캐릭터 스타일 프롬프트에 추가
+        if character_style_prompt:
+            enhanced_prompt = f"{enhanced_prompt}, character style: {character_style_prompt}, consistent with existing character design"
+        
+        # 2단계: DALL-E 3 API 호출 (GPT = 진)
+        try:
+            import openai
+            from django.conf import settings
+            import requests
+            
+            # OpenAI API 키 가져오기
+            api_key = getattr(settings, 'OPENAI_API_KEY', None) or os.environ.get('OPENAI_API_KEY')
+            
+            if not api_key:
+                raise Exception("OPENAI_API_KEY not found in settings or environment")
+            
+            print(f"[DALL-E] API 키 확인: {api_key[:20]}...")
+            
+            # OpenAI 클라이언트 초기화
+            openai.api_key = api_key
+            
+            # DALL-E 3 크기 매핑
+            dalle_size = '1024x1024'  # DALL-E 3는 정사각형만 지원
+            if size == '1024x768':
+                dalle_size = '1792x1024'  # 가로형
+            elif size == '768x1024':
+                dalle_size = '1024x1792'  # 세로형
+            
+            print(f"[DALL-E] 크기 변환: {size} → {dalle_size}")
+            
+            # DALL-E 3 이미지 생성
+            response = openai.images.generate(
+                model="dall-e-3",
+                prompt=enhanced_prompt,
+                size=dalle_size,
+                quality="standard",
+                n=1
+            )
+            
+            # 생성된 이미지 URL 가져오기
+            image_url_temp = response.data[0].url
+            print(f"[DALL-E] 임시 URL: {image_url_temp[:50]}...")
+            
+            # 이미지 다운로드
+            img_response = requests.get(image_url_temp, timeout=30)
+            img_response.raise_for_status()
+            image_data = img_response.content
+            
+            print(f"[DALL-E 생성 성공] 크기: {len(image_data)} bytes")
+                
+        except Exception as e:
+            print(f"[DALL-E API 오류] {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback: 에러 메시지 반환
+            return JsonResponse({
+                'status': 'error',
+                'error': f'이미지 생성 실패: {str(e)}',
+                'message': 'DALL-E API 오류가 발생했습니다. OpenAI API 키를 확인해주세요.',
+                'prompt': prompt,
+                'style': style,
+                'size': size
+            }, status=500)
+        
+        # Firebase Storage 업로드
+        try:
+            from google.cloud import storage
+            import uuid
+            
+            # Storage 클라이언트 초기화 (서비스 계정 사용)
+            service_account_path = os.path.join(os.path.dirname(__file__), '../../jnext-service-account.json')
+            storage_client = storage.Client.from_service_account_json(service_account_path)
+            
+            # 버킷 이름 (J님이 개설한 Firebase Storage)
+            bucket_name = 'jnext-e3dd9.firebasestorage.app'
+            bucket = storage_client.bucket(bucket_name)
+            
+            # 파일명 생성 (UUID + 타임스탬프)
+            timestamp = datetime.now(KST).strftime('%Y%m%d_%H%M%S')
+            unique_id = str(uuid.uuid4())[:8]
+            blob_path = f'images/{project_id}/{collection}/{doc_id}/{timestamp}_{unique_id}.png'
+            
+            blob = bucket.blob(blob_path)
+            
+            # 이미지 업로드
+            blob.upload_from_string(
+                image_data,
+                content_type='image/png'
+            )
+            
+            # Public URL 생성
+            blob.make_public()
+            image_url = blob.public_url
+            
+            print(f"[Firebase Storage 업로드 성공] {blob_path}")
+            print(f"[Public URL] {image_url}")
+            
+        except Exception as storage_error:
+            print(f"[Firebase Storage 오류] {str(storage_error)}")
+            # Storage 오류 시 Base64 인코딩하여 반환
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            image_url = f"data:image/png;base64,{image_base64}"
+            print("[Fallback] Base64 인코딩 사용")
+        
+        # 문서에 이미지 메타데이터 저장
+        db = firestore.client()
+        doc_ref = db.collection('projects').document(project_id).collection(collection).document(doc_id)
+        doc_snapshot = doc_ref.get()
+        
+        if doc_snapshot.exists:
+            doc_data = doc_snapshot.to_dict()
+            images = doc_data.get('이미지목록', [])
+            images.append({
+                'url': image_url,
+                'prompt': prompt,
+                'style': style,
+                'size': size,
+                'created_at': datetime.now(KST).isoformat()
+            })
+            doc_ref.update({'이미지목록': images})
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': '이미지가 생성되었습니다',
+            'image_url': image_url,
+            'prompt': prompt,
+            'style': style,
+            'size': size
+        })
         
     except Exception as e:
         import traceback

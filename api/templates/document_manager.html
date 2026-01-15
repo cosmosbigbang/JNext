@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JNext 문서 관리</title>
+    <!-- 전자책 출판용 폰트 임포트 (KoPub, 본명조/본고딕) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -166,8 +170,9 @@
         }
 
         .doc-title {
-            font-size: 16px;
-            font-weight: 600;
+            font-family: 'Noto Sans KR', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
             color: #333;
         }
 
@@ -201,9 +206,10 @@
         }
 
         .doc-preview {
-            font-size: 13px;
+            font-family: 'Noto Serif KR', serif;
+            font-size: 14px;
             color: #555;
-            line-height: 1.5;
+            line-height: 1.8;
             max-height: 60px;
             overflow: hidden;
         }
@@ -228,18 +234,44 @@
         }
 
         .preview-title {
-            font-size: 20px;
+            font-family: 'Noto Sans KR', sans-serif;
+            font-size: 24px;
             font-weight: 700;
-            color: #333;
-            margin-bottom: 15px;
+            color: #222;
+            margin-bottom: 20px;
+            line-height: 1.4;
         }
 
         .preview-content {
+            font-family: 'Noto Serif KR', serif;
             background: white;
-            padding: 20px;
+            padding: 30px 40px;
             border-radius: 12px;
-            line-height: 1.6;
+            font-size: 16px;
+            line-height: 2.0;
             white-space: pre-wrap;
+            color: #333;
+            word-break: keep-all;
+        }
+
+        /* 전자책 이미지 스타일 */
+        .preview-content img,
+        img.ebook-image {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        /* float 이미지 뒤 텍스트 정리 */
+        .preview-content::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+
+        /* 이미지 캡션 */
+        .image-caption {
+            font-style: italic;
+            color: #666;
         }
 
         .empty-state {
@@ -260,6 +292,19 @@
             padding: 40px;
             font-size: 16px;
             color: #667eea;
+        }
+
+        /* textarea 전자책 폰트 적용 */
+        textarea {
+            font-family: 'Noto Serif KR', serif;
+            font-size: 16px;
+            line-height: 2.0;
+        }
+
+        /* 제목 요소 전체 폰트 적용 */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Noto Sans KR', sans-serif;
+            font-weight: 700;
         }
     </style>
 </head>
@@ -292,8 +337,18 @@
             </div>
 
             <div class="control-group">
-                <label>키워드:</label>
-                <input type="text" id="keyword-input" placeholder="제목, 내용 검색..." onkeypress="if(event.key==='Enter') searchDocuments()">
+                <label>검색 타입:</label>
+                <select id="search-type-select">
+                    <option value="all">전체</option>
+                    <option value="category">카테고리</option>
+                    <option value="exercise">운동명</option>
+                    <option value="keyword">키워드</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>검색어:</label>
+                <input type="text" id="keyword-input" placeholder="검색어 입력..." onkeypress="if(event.key==='Enter') searchDocuments()">
                 <button onclick="searchDocuments()">🔍 검색</button>
             </div>
 
@@ -353,6 +408,7 @@
         // 문서 검색
         async function searchDocuments() {
             const collection = document.getElementById('collection-select').value;
+            const searchType = document.getElementById('search-type-select').value;
             const keyword = document.getElementById('keyword-input').value.trim();
 
             const listDiv = document.getElementById('document-list');
@@ -362,7 +418,7 @@
                 // RAW, DRAFT, FINAL 모두 검색
                 const collections = collection ? [collection] : ['raw', 'draft', 'final'];
                 const promises = collections.map(col => 
-                    fetch(`/api/v2/documents/search/?project=${selectedProject}&collection=${col}&keyword=${encodeURIComponent(keyword)}`)
+                    fetch(`/api/v2/documents/search/?project=${selectedProject}&collection=${col}&keyword=${encodeURIComponent(keyword)}&search_type=${searchType}`)
                         .then(r => r.json())
                         .then(data => data.documents || [])
                 );
@@ -430,12 +486,14 @@
         function viewDocument(index) {
             const doc = allDocuments[index];
             const panel = document.getElementById('preview-panel');
-            
             // 디버깅: 실제 데이터 확인
             console.log('Doc data:', doc);
             
             // 내용 우선순위: 내용전체 > 내용
-            const fullContent = doc.내용전체 || doc.내용 || doc.content || '내용 없음';
+            let fullContent = doc.내용전체 || doc.내용 || doc.content || '내용 없음';
+            
+            // 마크다운 이미지를 HTML로 변환
+            fullContent = convertMarkdownImagesToHtml(fullContent);
             
             panel.innerHTML = `
                 <div class="preview-title">${doc.제목 || doc.title || '제목 없음'}</div>
@@ -452,13 +510,30 @@
                 ` : ''}
                 <div class="preview-content">
                     <strong>내용:</strong>
-                    <div id="content-display" style="margin-top: 10px; white-space: pre-wrap;">${fullContent}</div>
+                    <div id="content-display" style="margin-top: 10px;">${fullContent}</div>
                 </div>
-                <div style="margin-top: 20px; display: flex; gap: 10px;">
-                    <button onclick="enableEdit(${index})" style="flex: 1;">✏️ 수정 모드</button>
-                    <button onclick="regenerate(${index})" style="flex: 1; background: #28a745;">🔄 재생성</button>
+                <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px;">
+                    <button onclick="enableEdit(${index})">✏️ 수정 모드</button>
+                    <button onclick="regenerate(${index})" style="background: #28a745;">🔄 재생성</button>
+                    <button onclick="showImageGenerator(${index})" style="background: #ff6b6b;">🎨 이미지 생성</button>
+                    ${doc.collection !== 'final' ? `<button onclick="moveToFinal(${index})" style="background: #007bff;">➡️ FINAL 이동</button>` : ''}
                 </div>
             `;
+        }
+
+        // 마크다운 이미지를 HTML로 변환
+        function convertMarkdownImagesToHtml(text) {
+            if (!text) return '';
+            
+            // ![alt](url) 형식을 <img> 태그로 변환
+            let result = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
+                return `<img src="${url}" alt="${alt}" class="ebook-image"><div class="image-caption">${alt}</div>`;
+            });
+            
+            // 나머지 텍스트는 줄바꿈 유지
+            result = result.replace(/\n/g, '<br>');
+            
+            return result;
         }
 
         // 수정 모드 활성화
@@ -820,6 +895,266 @@
             } catch (error) {
                 console.error('삭제 실패:', error);
                 alert('❌ 삭제 중 오류 발생');
+            }
+        }
+
+        // FINAL 이동
+        async function moveToFinal(index) {
+            const doc = allDocuments[index];
+            
+            if (!confirm(`"${doc.제목 || doc.title}"을(를) FINAL로 이동할까요?\n\nFINAL 이동 후:\n- 밈스토리 생성\n- 밈이미지 생성\n- 자막 작성\n- 숏폼 제작\n등의 작업이 가능합니다.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/v2/documents/move-to-final/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        project: selectedProject,
+                        collection: doc.collection,
+                        doc_id: doc.id
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert(`✅ FINAL로 이동 완료!\n\n다음 작업:\n- 밈 자동화\n- 숏폼 제작\n- 전자책 편집`);
+                    searchDocuments();
+                    setTimeout(() => {
+                        // FINAL 컬렉션으로 전환하여 확인
+                        document.getElementById('collection-select').value = 'final';
+                        searchDocuments();
+                    }, 1000);
+                } else {
+                    alert('❌ 이동 실패: ' + (result.error || result.message));
+                }
+            } catch (error) {
+                console.error('FINAL 이동 실패:', error);
+                alert('❌ 이동 중 오류 발생');
+            }
+        }
+
+        // 이미지 생성 UI 표시
+        function showImageGenerator(index) {
+            const doc = allDocuments[index];
+            const panel = document.getElementById('preview-panel');
+            
+            panel.innerHTML = `
+                <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%); padding: 20px; border-radius: 12px; margin-bottom: 20px; color: white;">
+                    <h2 style="margin: 0 0 10px 0;">🎨 이미지 생성</h2>
+                    <p style="margin: 0; opacity: 0.9;">전자책/이론 설명용 이미지를 AI로 생성합니다</p>
+                </div>
+                
+                <div style="background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold; font-size: 15px;">📝 이미지 설명 (프롬프트):</label>
+                    <textarea id="image-prompt" rows="4" placeholder="예: 골반 돌리기 동작 설명 다이어그램, 근육 강조, 교육용
+예: 하이노워밍 스트레칭 자세 일러스트, 부드러운 색상
+예: 척추 구조 해부학 그림, 명확한 라벨링" style="width: 100%; padding: 12px; border: 2px solid #ff6b6b; border-radius: 8px; font-size: 14px; font-family: 'Nanum Myeongjo', serif; resize: vertical;">${doc.제목 || ''} 설명 이미지</textarea>
+                    <small style="color: #666;">💡 구체적으로 작성할수록 원하는 이미지가 생성됩니다</small>
+                </div>
+                
+                <div style="background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: bold; font-size: 15px;">🎨 이미지 스타일:</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                        <label style="cursor: pointer; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; text-align: center; transition: all 0.2s;" onmouseover="this.style.borderColor='#ff6b6b'" onmouseout="if(!this.querySelector('input').checked) this.style.borderColor='#e0e0e0'">
+                            <input type="radio" name="image-style" value="diagram" checked onchange="this.parentElement.parentElement.querySelectorAll('label').forEach(l => l.style.borderColor='#e0e0e0'); this.parentElement.style.borderColor='#ff6b6b';" style="margin-bottom: 5px;">
+                            <div style="font-size: 13px; font-weight: 600;">📊 다이어그램</div>
+                            <div style="font-size: 11px; color: #666;">선명, 교육용</div>
+                        </label>
+                        <label style="cursor: pointer; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; text-align: center; transition: all 0.2s;" onmouseover="this.style.borderColor='#ff6b6b'" onmouseout="if(!this.querySelector('input').checked) this.style.borderColor='#e0e0e0'">
+                            <input type="radio" name="image-style" value="illustration" onchange="this.parentElement.parentElement.querySelectorAll('label').forEach(l => l.style.borderColor='#e0e0e0'); this.parentElement.style.borderColor='#ff6b6b';" style="margin-bottom: 5px;">
+                            <div style="font-size: 13px; font-weight: 600;">🎨 일러스트</div>
+                            <div style="font-size: 11px; color: #666;">부드러운, 친근한</div>
+                        </label>
+                        <label style="cursor: pointer; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; text-align: center; transition: all 0.2s;" onmouseover="this.style.borderColor='#ff6b6b'" onmouseout="if(!this.querySelector('input').checked) this.style.borderColor='#e0e0e0'">
+                            <input type="radio" name="image-style" value="realistic" onchange="this.parentElement.parentElement.querySelectorAll('label').forEach(l => l.style.borderColor='#e0e0e0'); this.parentElement.style.borderColor='#ff6b6b';" style="margin-bottom: 5px;">
+                            <div style="font-size: 13px; font-weight: 600;">📷 사실적</div>
+                            <div style="font-size: 11px; color: #666;">사진 같은</div>
+                        </label>
+                    </div>
+                </div>
+                
+                <div style="background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold; font-size: 15px;">📸 이미지 크기:</label>
+                    <select id="image-size" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px;">
+                        <option value="1024x1024">정사각형 - 대 (1024x1024)</option>
+                        <option value="1024x768" selected>가로형 - 대 (1024x768)</option>
+                        <option value="768x1024">세로형 - 대 (768x1024)</option>
+                        <option value="512x512">정사각형 - 중 (512x512)</option>
+                        <option value="512x384">가로형 - 중 (512x384)</option>
+                        <option value="384x512">세로형 - 중 (384x512)</option>
+                        <option value="256x256">정사각형 - 소 (256x256)</option>
+                        <option value="256x192">가로형 - 소 (256x192)</option>
+                        <option value="192x256">세로형 - 소 (192x256)</option>
+                    </select>
+                </div>
+                
+                <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
+                    <strong>💡 팁:</strong>
+                    <ul style="margin: 5px 0 0 20px; font-size: 13px; line-height: 1.6;">
+                        <li>구체적인 설명 추가 (색상, 각도, 요소 등)</li>
+                        <li>필요한 라벨이나 텍스트 명시</li>
+                        <li>기존 meme_images 폴더의 J/아내 스타일 참고 가능</li>
+                    </ul>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">
+                    <button onclick="generateImage(${index})" style="background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%); font-size: 16px; padding: 15px;">✨ 이미지 생성</button>
+                    <button onclick="viewDocument(${index})" style="background: #6c757d; padding: 15px;">❌ 취소</button>
+                </div>
+                
+                <div id="image-result" style="margin-top: 20px;"></div>
+            `;
+        }
+
+        // 이미지 생성
+        async function generateImage(index) {
+            const doc = allDocuments[index];
+            const prompt = document.getElementById('image-prompt').value.trim();
+            const style = document.querySelector('input[name="image-style"]:checked').value;
+            const size = document.getElementById('image-size').value;
+            
+            if (!prompt) {
+                alert('❌ 이미지 설명을 입력해주세요');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('image-result');
+            resultDiv.innerHTML = '<div style="text-align: center; padding: 40px; background: white; border-radius: 12px;"><div style="font-size: 18px; margin-bottom: 10px;">🎨 이미지 생성 중...</div><div style="color: #666;">AI가 작업 중입니다. 잠시만 기다려주세요.</div></div>';
+            
+            try {
+                const response = await fetch('/api/v2/images/generate/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        project: selectedProject,
+                        doc_id: doc.id,
+                        collection: doc.collection,
+                        prompt: prompt,
+                        style: style,
+                        size: size
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    resultDiv.innerHTML = `
+                        <div style="background: #d4edda; padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+                            <h3 style="margin: 0 0 10px 0; color: #155724;">✅ 이미지 생성 완료!</h3>
+                        </div>
+                        <div style="background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+                            <img src="${result.image_url}" class="ebook-image" alt="생성된 이미지">
+                            <div class="image-caption">${prompt}</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">📋 마크다운 (복사해서 사용):</label>
+                            <input type="text" value="![${prompt}](${result.image_url})" readonly onclick="this.select()" style="width: 100%; padding: 10px; border: 2px solid #28a745; border-radius: 8px; font-family: monospace; font-size: 13px;">
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                            <button onclick="insertImageToDocument(${index}, '${result.image_url}', '${prompt}')" style="background: #28a745;">📄 문서에 삽입</button>
+                            <button onclick="showImageGenerator(${index})" style="background: #ffc107; color: #000;">🔄 다시 생성</button>
+                            <button onclick="viewDocument(${index})" style="background: #667eea;">✅ 완료</button>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div style="background: #f8d7da; padding: 20px; border-radius: 12px; border-left: 4px solid #dc3545;">
+                            <h3 style="margin: 0 0 10px 0; color: #721c24;">❌ 생성 실패</h3>
+                            <p style="margin: 0; color: #721c24;">${result.error || result.message}</p>
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <button onclick="showImageGenerator(${index})" style="width: 100%; background: #667eea;">🔄 다시 시도</button>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('이미지 생성 실패:', error);
+                resultDiv.innerHTML = `
+                    <div style="background: #f8d7da; padding: 20px; border-radius: 12px; border-left: 4px solid #dc3545;">
+                        <h3 style="margin: 0 0 10px 0; color: #721c24;">❌ 오류 발생</h3>
+                        <p style="margin: 0; color: #721c24;">이미지 생성 중 오류가 발생했습니다.</p>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <button onclick="showImageGenerator(${index})" style="width: 100%; background: #667eea;">🔄 다시 시도</button>
+                    </div>
+                `;
+            }
+        }
+
+        // 이미지를 문서에 삽입
+        async function insertImageToDocument(index, imageUrl, caption) {
+            const doc = allDocuments[index];
+            const currentContent = doc.내용전체 || doc.내용 || doc.content || '';
+            
+            // 이미지 크기에 따라 다른 레이아웃 적용
+            const size = document.getElementById('image-size').value;
+            const [width, height] = size.split('x').map(Number);
+            
+            let imageHtml = '';
+            
+            if (width >= 1024) {
+                // 큰 이미지: 중앙 정렬, 전체 너비
+                imageHtml = `\n\n<div style="text-align: center; margin: 30px 0;">
+    <img src="${imageUrl}" alt="${caption}" class="ebook-image" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15);">
+    <div class="image-caption" style="font-size: 14px; color: #666; font-style: italic; margin-top: 8px;">${caption}</div>
+</div>\n\n`;
+            } else if (width >= 512) {
+                // 중간 이미지: float left, 텍스트 감싸기
+                imageHtml = `\n\n<div style="float: left; margin: 0 20px 15px 0; max-width: ${width}px;">
+    <img src="${imageUrl}" alt="${caption}" style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <div style="font-size: 12px; color: #666; font-style: italic; margin-top: 5px; text-align: center;">${caption}</div>
+</div>\n\n`;
+            } else {
+                // 작은 이미지: float right, 텍스트 감싸기
+                imageHtml = `\n\n<div style="float: right; margin: 0 0 15px 20px; max-width: ${width}px;">
+    <img src="${imageUrl}" alt="${caption}" style="width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <div style="font-size: 11px; color: #666; font-style: italic; margin-top: 5px; text-align: center;">${caption}</div>
+</div>\n\n`;
+            }
+            
+            const newContent = currentContent + imageHtml;
+            
+            console.log('[이미지 삽입] 기존 내용 길이:', currentContent.length);
+            console.log('[이미지 삽입] 이미지 URL:', imageUrl);
+            console.log('[이미지 삽입] 이미지 크기:', size);
+            console.log('[이미지 삽입] 레이아웃:', width >= 1024 ? '중앙' : (width >= 512 ? '좌측 float' : '우측 float'));
+            console.log('[이미지 삽입] 새 내용 길이:', newContent.length);
+            
+            try {
+                const response = await fetch('/api/v2/documents/update/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        project: selectedProject,
+                        collection: doc.collection,
+                        doc_id: doc.id,
+                        updates: {
+                            '내용전체': newContent,
+                            '내용': newContent
+                        }
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('[이미지 삽입 응답]', result);
+                
+                if (result.status === 'success') {
+                    alert('✅ 이미지가 문서에 삽입되었습니다!');
+                    
+                    // 로컬 데이터 즉시 업데이트
+                    allDocuments[index].내용전체 = newContent;
+                    allDocuments[index].내용 = newContent;
+                    
+                    // 문서 다시 표시
+                    viewDocument(index);
+                } else {
+                    alert('❌ 삽입 실패: ' + (result.error || result.message));
+                }
+            } catch (error) {
+                console.error('이미지 삽입 실패:', error);
+                alert('❌ 삽입 중 오류 발생');
             }
         }
     </script>
