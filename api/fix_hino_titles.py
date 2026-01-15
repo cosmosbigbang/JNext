@@ -17,27 +17,38 @@ from firebase_admin import firestore
 def normalize_hino_title(title):
     """
     하이노밸런스 제목 정규화
-    "하이노 워밍 팔 돌리기: 효과" -> "하이노워밍팔돌리기: 효과"
+    "하이노 풋삽 벽 두손 운동 분석" -> "하이노풋삽벽두손 운동 분석"
     
     규칙:
-    1. "하이노"로 시작하는 단어는 다음 특수문자(:, ,, . 등) 나올 때까지 모든 띄어쓰기 제거
-    2. 특수문자 이후는 그대로 유지
+    1. "하이노" 단어 + 뒤따르는 한글 단어 3개까지만 붙여쓰기
+    2. 그 이후 단어는 띄어쓰기 유지 ("운동 분석", "효과", "방법" 등)
     """
     if not title or '하이노' not in title:
         return title
     
-    # "하이노"로 시작하는 부분 찾기
+    words = title.split()
     result = []
-    parts = re.split(r'([:\.,!\?])', title)  # 특수문자 기준으로 분리 (구분자 포함)
+    i = 0
     
-    for i, part in enumerate(parts):
-        if '하이노' in part:
-            # 하이노가 포함된 부분은 모든 띄어쓰기 제거
-            result.append(part.replace(' ', ''))
+    while i < len(words):
+        if '하이노' in words[i]:
+            # 하이노 단어 다음 한글 단어들만 붙이기 (최대 3개)
+            combined = words[i]
+            i += 1
+            count = 0
+            while i < len(words) and count < 3 and re.match(r'^[가-힣]+$', words[i]):
+                # 특수문자 포함 단어면 중단
+                if ':' in words[i] or ',' in words[i] or '.' in words[i]:
+                    break
+                combined += words[i]
+                i += 1
+                count += 1
+            result.append(combined)
         else:
-            result.append(part)
+            result.append(words[i])
+            i += 1
     
-    return ''.join(result)
+    return ' '.join(result)
 
 
 def fix_titles():

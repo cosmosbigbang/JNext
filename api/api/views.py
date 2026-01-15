@@ -186,8 +186,8 @@ def hino_review_page(request):
 
 
 def now_kst():
-    """한국 시간 반환"""
-    return datetime.now(KST)
+    """한국 시간 반환 (UTC → KST 명확한 변환)"""
+    return datetime.now(timezone.utc).astimezone(KST)
 
 # Phase 6: 세션 저장소 (간이 구현, 실제로는 Django 세션 사용 권장)
 last_ai_response = None
@@ -250,8 +250,11 @@ def load_chat_history(limit=20):
     """
     try:
         db = firestore.client()
-        # 문서 ID 역순 정렬 (최신 메시지가 먼저)
-        docs = db.collection('chat_history').limit(limit).stream()
+        # timestamp 기준 내림차순 정렬 (최신이 먼저) → 역순으로 뒤집어 오래된 것부터
+        docs = db.collection('chat_history')\
+                .order_by('timestamp', direction=firestore.Query.DESCENDING)\
+                .limit(limit)\
+                .stream()
         
         history = []
         for doc in docs:

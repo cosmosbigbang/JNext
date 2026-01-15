@@ -90,22 +90,22 @@ class ContextManager:
         """
         슬라이더 값 → 가중치 변환
         
-        focus 0-20: 일반 지식 중심
-        focus 21-40: 일반 > 프로젝트
-        focus 41-60: 균형 (프로젝트 중심)
-        focus 61-80: 프로젝트 우선
-        focus 81-100: 프로젝트 전문가
+        DB OFF (focus=0): 대화 100%
+        DB ON (focus=100): 대화 30% + DB 70%
         """
         
-        # 대화 맥락은 항상 15% 유지
-        conversation_weight = 15
+        if focus == 0:
+            # DB OFF: 대화 이력만 100%
+            return {
+                'conversation': 100,
+                'project': 0,
+                'general': 0
+            }
         
-        # 프로젝트 가중치 (focus와 비례, 더 강하게)
-        # 50% → 55%, 100% → 85%
-        project_weight = int(15 + (focus * 0.7))
-        
-        # 일반 지식 가중치 (나머지)
-        general_weight = 100 - conversation_weight - project_weight
+        # DB ON: 대화 30% 고정, 나머지는 DB vs 일반지식
+        conversation_weight = 30
+        project_weight = 70  # DB 전체
+        general_weight = 0
         
         return {
             'conversation': conversation_weight,
@@ -131,6 +131,16 @@ class ContextManager:
         """시스템 프롬프트 구성"""
         
         base_prompt = f"""당신은 J님의 창의적 파트너 AI입니다.
+
+[핵심 원칙]
+1. **대화 맥락을 철저히 유지**하세요
+   - "그거", "그것", "이전", "방금" 등은 바로 이전 대화를 참조합니다
+   - J님이 주제를 명시하지 않으면 직전 대화의 주제를 이어갑니다
+   - 대화 이력에 나온 개념/용어를 잊지 마세요
+
+2. **근거 없는 추측 금지**
+   - 대화 이력이나 DB에 없는 내용은 "확실하지 않습니다"라고 명시
+   - 절대 거짓 정보를 만들어내지 마세요
 
 [현재 설정]
 - 프로젝트 집중도: {focus}%
@@ -158,8 +168,9 @@ class ContextManager:
 """
         else:
             base_prompt += """[중요 지침]
-- 자유롭게 창의적으로 답변하세요.
-- 프로젝트는 참고만 하세요.
+- **대화 이력이 가장 중요**합니다 (100%)
+- 직전 대화의 주제를 이어서 답변하세요
+- J님이 "그거", "효과" 등만 언급하면 바로 이전 대화 주제를 참조하세요
 """
         
         return base_prompt
@@ -170,10 +181,10 @@ class ContextManager:
         
         message_parts = []
         
-        # 최근 대화 5턴
+        # 최근 대화 (모바일 수준)
         if conversation_history:
             message_parts.append("=== 최근 대화 ===")
-            for msg in conversation_history[-10:]:  # 10개 = 5턴
+            for msg in conversation_history[-50:]:  # 50개 = 25턴 (모바일 수준)
                 role = "J님" if msg['role'] == 'user' else "AI"
                 message_parts.append(f"{role}: {msg['content']}")
             message_parts.append("\n=== 현재 질문 ===")
@@ -193,25 +204,20 @@ class ContextManager:
         
         message_parts = []
         
-        # 1. 대화 맥락 (가중치에 따라 양 조절)
+        # 1. 대화 맥락 (전체 이력 전달 - 모바일 수준)
         if conversation_history and weights['conversation'] > 0:
             message_parts.append(f"=== 대화 맥락 (가중치: {weights['conversation']}%) ===")
-            # 가중치에 비례해서 턴 수 조절
-            turns = max(2, int(weights['conversation'] / 10))
-            for msg in conversation_history[-(turns*2):]:
+            # 가중치는 중요도를 의미, 개수는 전체 전달
+            for msg in conversation_history[-50:]:  # 최대 50개 (25턴)
                 role = "J님" if msg['role'] == 'user' else "AI"
                 message_parts.append(f"{role}: {msg['content']}")
             message_parts.append("")
         
-        # 2. 프로젝트 DB 맥락 (가중치에 따라 양 조절)
+        # 2. 프로젝트 DB 맥락 (전체 전달)
         if project_db_context and weights['project'] > 0:
             message_parts.append(f"=== 프로젝트 DB (가중치: {weights['project']}%) ===")
-            # 가중치가 높으면 전체, 낮으면 일부만
-            if weights['project'] >= 50:
-                message_parts.append(project_db_context)
-            else:
-                # 가중치 낮으면 요약본만 (첫 500자)
-                message_parts.append(project_db_context[:500] + "...")
+            # 가중치는 중요도를 의미, DB는 전체 전달
+            message_parts.append(project_db_context)
             message_parts.append("")
         
         # 3. 일반 지식 활용 안내

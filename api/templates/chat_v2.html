@@ -228,6 +228,59 @@
             opacity: 0.9;
         }
 
+        /* 토글 스위치 스타일 */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.3s;
+            border-radius: 26px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+
+        .toggle-status {
+            text-align: center;
+            margin-top: 8px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
         .chat-area {
             flex: 1;
             overflow-y: auto;
@@ -572,20 +625,16 @@
                         </div>
                     </div>
                     
-                    <!-- DB 사용률 슬라이더 -->
+                    <!-- DB 사용 토글 -->
                     <div class="slider-section">
                         <div class="slider-header">
-                            <span class="slider-label">🎯 DB 사용률</span>
-                            <span class="slider-value" id="db-value">10%</span>
+                            <span class="slider-label">🗄️ DB 사용</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="db-toggle">
+                                <span class="toggle-slider"></span>
+                            </label>
                         </div>
-                        <div class="slider-container">
-                            <input type="range" min="0" max="100" value="10" class="db-slider" id="db-slider">
-                        </div>
-                        <div class="slider-labels">
-                            <span>💭 최소</span>
-                            <span>⚖️ 균형</span>
-                            <span>📚 최대</span>
-                        </div>
+                        <div class="toggle-status" id="db-status">⚫ OFF</div>
                     </div>
                 </div>
             </div>
@@ -643,12 +692,12 @@
                         <span class="badge badge-model" id="current-model">젠시</span>
                     </div>
                     <div class="info-row">
-                        <span class="info-label">집중도</span>
-                        <span class="info-value" id="current-focus">50%</span>
+                        <span class="info-label">DB</span>
+                        <span class="info-value" id="current-db">⚫ OFF</span>
                     </div>
                     <div class="info-row">
                         <span class="info-label">Temperature</span>
-                        <span class="badge badge-temp" id="current-temp">0.45</span>
+                        <span class="badge badge-temp" id="current-temp">0.90</span>
                     </div>
                 </div>
 
@@ -703,10 +752,6 @@
 
                 <!-- 저장 버튼 -->
                 <button class="save-btn" id="save-raw-btn">💾 RAW 컬렉션에 저장</button>
-
-                <div class="empty-state" style="margin-top: 20px;">
-                    <p>💡 슬라이더를 움직여서<br>AI의 집중도를 조절해보세요!</p>
-                </div>
             </div>
         </div>
     </div>
@@ -799,47 +844,12 @@
             });
         }
 
-        // 컨텍스트 가중치 업데이트
-        function updateContextWeights(focus) {
-            const focusNum = parseInt(focus);
-            const conversation = 20;
-            const project = Math.floor(focusNum * 0.7);
-            const general = 100 - conversation - project;
-            const temp = (0.7 - (focusNum / 100 * 0.5)).toFixed(2);
+        // 컨텍스트 가중치는 서버에서 계산되므로 UI 업데이트만 필요
 
-            // 텍스트 업데이트
-            document.getElementById('weight-conversation').textContent = conversation + '%';
-            document.getElementById('weight-project').textContent = project + '%';
-            document.getElementById('weight-general').textContent = general + '%';
-            document.getElementById('current-focus').textContent = focusNum + '%';
-            document.getElementById('current-temp').textContent = temp;
-
-            // 바 업데이트
-            document.getElementById('bar-conversation').style.width = conversation + '%';
-            document.getElementById('bar-project').style.width = project + '%';
-            document.getElementById('bar-general').style.width = general + '%';
-        }
-
-        // 프로젝트 변경 시 배지 업데이트 및 DB 슬라이더 자동 조정
+        // 프로젝트 변경 시 배지 업데이트
         projectSelect.addEventListener('change', function() {
             const projectName = this.options[this.selectedIndex].text;
-            const projectValue = this.value;
             document.getElementById('current-project').textContent = projectName;
-            
-            // DB 슬라이더만 자동 조정 (Temperature는 유지)
-            const dbSlider = document.getElementById('db-slider');
-            if (projectValue) {
-                // 프로젝트 모드: 10% (기본값 유지)
-                dbSlider.value = 10;
-                document.getElementById('db-value').textContent = '10%';
-            } else {
-                // 대화 모드: 10%
-                dbSlider.value = 10;
-                document.getElementById('db-value').textContent = '10%';
-            }
-            
-            // 가중치 업데이트
-            updateContextWeights(dbSlider.value);
         });
 
         modelSelect.addEventListener('change', function() {
@@ -852,26 +862,31 @@
         window.addEventListener('DOMContentLoaded', function() {
             // Temperature 슬라이더 초기화
             const tempSlider = document.getElementById('temp-slider');
-            tempSlider.value = 85;
-            document.getElementById('temp-value').textContent = '0.85';
+            tempSlider.value = 90;  // 0.9
+            document.getElementById('temp-value').textContent = '0.90';
+            document.getElementById('current-temp').textContent = '0.90';  // 배지 초기화
             
-            // DB 슬라이더 초기화 (기본값: 10%)
-            const dbSlider = document.getElementById('db-slider');
-            dbSlider.value = 10;
-            document.getElementById('db-value').textContent = '10%';
-            updateContextWeights(10);
+            // DB 토글 초기화 (기본값: OFF)
+            const dbToggle = document.getElementById('db-toggle');
+            dbToggle.checked = false;
+            document.getElementById('db-status').textContent = '⚫ OFF';
             
             // Temperature 슬라이더 이벤트
             tempSlider.addEventListener('input', function() {
                 const tempValue = (this.value / 100).toFixed(2);
                 document.getElementById('temp-value').textContent = tempValue;
+                document.getElementById('current-temp').textContent = tempValue;  // 배지도 업데이트
             });
             
-            // DB 슬라이더 이벤트
-            dbSlider.addEventListener('input', function() {
-                document.getElementById('db-value').textContent = this.value + '%';
-                updateContextWeights(this.value);
+            // DB 토글 이벤트
+            dbToggle.addEventListener('change', function() {
+                const status = this.checked ? '🟢 ON' : '⚫ OFF';
+                document.getElementById('db-status').textContent = status;
+                document.getElementById('current-db').textContent = status;  // 배지도 업데이트
             });
+            
+            // 초기 DB 상태 배지 설정
+            document.getElementById('current-db').textContent = '⚫ OFF';
             
             // 초기 프로젝트 이름 설정
             document.getElementById('current-project').textContent = '💬 대화';
@@ -886,9 +901,9 @@
             const model = modelSelect.value;
             const project = projectSelect.value || null;
             const tempSlider = document.getElementById('temp-slider');
-            const dbSlider = document.getElementById('db-slider');
+            const dbToggle = document.getElementById('db-toggle');
             const temperature = parseFloat((tempSlider.value / 100).toFixed(2));
-            const db_focus = parseInt(dbSlider.value);
+            const use_db = dbToggle.checked;
 
             // 사용자 메시지 추가
             addMessage('user', message);
@@ -908,7 +923,7 @@
                         model: model,
                         project: project,
                         temperature: temperature,
-                        db_focus: db_focus
+                        db: use_db
                     })
                 });
 

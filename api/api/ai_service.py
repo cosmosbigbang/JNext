@@ -7,6 +7,7 @@ Phase 7: JSON 스키마 검증
 from django.conf import settings
 from google import genai
 import json
+import re
 
 
 def validate_ai_response(response):
@@ -180,12 +181,12 @@ def call_ai_model(model_name, user_message, system_prompt, db_context, temperatu
     
     Args:
         model_name: 'gemini-flash' | 'gemini-pro' | 'gpt' | 'claude' | 'all'
-        user_message: J님의 메시지
+        user_message: J님의 메시지 (v2에서는 이미 맥락이 포함된 full_message)
         system_prompt: 시스템 프롬프트
-        db_context: Firestore DB 데이터
+        db_context: Firestore DB 데이터 (v2에서는 빈 문자열)
         temperature: 창의성 수준 (None이면 mode에 따라 자동 설정)
-        mode: 'organize' | 'hybrid' | 'analysis'
-        conversation_history: 이전 대화 기록 (list of {'role': 'user'/'assistant', 'content': '...'})
+        mode: 'organize' | 'hybrid' | 'analysis' | 'v2'
+        conversation_history: 이전 대화 기록 (v2에서는 빈 리스트)
     
     Returns:
         dict: JSON 응답 (AI_RESPONSE_SCHEMA 형식)
@@ -195,7 +196,8 @@ def call_ai_model(model_name, user_message, system_prompt, db_context, temperatu
         temperature_map = {
             'organize': 0.3,  # 사실 중심, 환각 최소화
             'hybrid': 0.5,    # 균형
-            'analysis': 0.7   # 창의성 허용
+            'analysis': 0.7,  # 창의성 허용
+            'v2': 0.9         # v2 기본값
         }
         temperature = temperature_map.get(mode, 0.5)
     
@@ -209,43 +211,57 @@ def call_ai_model(model_name, user_message, system_prompt, db_context, temperatu
     model_name_korean = model_info_map.get(model_name, model_name)
     enhanced_prompt = f"🎯 당신의 이름: {model_name_korean}\n\n{system_prompt}"
     
-    # 대화 기록 포맷팅
-    history_context = ""
+    # Gemini Native History: 메시지 리스트 구성
+    messages = []
+    
+    # 대화 이력을 리스트로 적재 (Native History)
     if conversation_history and len(conversation_history) > 0:
-        history_context = "\n\n=== 이전 대화 맥락 ===\n"
-        for msg in conversation_history[-10:]:  # 최근 10개만 (5턴)
-            role_kr = "J님" if msg['role'] == 'user' else model_name_korean
-            history_context += f"{role_kr}: {msg['content']}\n\n"
-        history_context += "=== 현재 질문 ===\n"
+        for msg in conversation_history:
+            # Gemini API: 'assistant' → 'model'
+            role = 'model' if msg['role'] in ['assistant', 'model'] else 'user'
+            messages.append({'role': role, 'parts': [{'text': msg['content']}]})
     
-    full_message = f"{history_context}{db_context}\n\nJ님 질문: {user_message}"
+    # 현재 유저 메시지 추가
+    messages.append({'role': 'user', 'parts': [{'text': user_message}]})
     
-    # Gemini 계열 (Flash/Pro)
+    # DB Context가 있으면 시스템 프롬프트에 추가
+    final_system_prompt = enhanced_prompt
+    if db_context:
+        final_system_prompt += f"\n\n[참고할 DB 지식]\n{db_context}"
+    
+    # Gemini 계열 (Flash/Pro) - Native History 전달
     if model_name in ['gemini-flash', 'gemini-pro']:
-        return _call_gemini(full_message, enhanced_prompt, model_key=model_name, temperature=temperature)
+        return _call_gemini(messages, final_system_prompt, model_key=model_name, temperature=temperature)
     
     # 기본값 fallback
     elif model_name == 'gemini' or not model_name:
-        return _call_gemini(full_message, enhanced_prompt, model_key=settings.DEFAULT_AI_MODEL, temperature=temperature)
+        return _call_gemini(messages, final_system_prompt, model_key=settings.DEFAULT_AI_MODEL, temperature=temperature)
     
     elif model_name == 'gpt':
+        # GPT는 문자열로 변환 필요 (향후 개선)
+        full_message = messages[-1]['parts'][0]['text'] if mode == 'v2' else user_message
         return _call_gpt(full_message, enhanced_prompt, temperature=temperature)
     
     elif model_name == 'claude':
+        # Claude는 문자열로 변환 필요 (향후 개선)
+        full_message = messages[-1]['parts'][0]['text'] if mode == 'v2' else user_message
         return _call_claude(full_message, enhanced_prompt, temperature=temperature)
     
     elif model_name == 'all':
-        # 3두 체계: 모든 모델 호출 후 비교
+        # 멀티 모델은 문자열로 변환 필요 (향후 개선)
+        full_message = messages[-1]['parts'][0]['text'] if mode == 'v2' else user_message
         return _call_all_models(full_message, system_prompt, temperature=temperature)
     
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
 
-def _call_gemini(full_message, system_prompt, model_key='gemini-pro', temperature=0.5):
-    """Gemini API 호출 (JSON 응답 강제)
+def _call_gemini(messages, system_prompt, model_key='gemini-pro', temperature=0.5):
+    """Gemini API 호출 (Native History 지원)
     
     Args:
+        messages: [{'role': 'user'|'model', 'parts': [{'text': '...'}]}] 형태의 리스트
+        system_prompt: 시스템 프롬프트
         model_key: 'gemini-flash' | 'gemini-pro'
         temperature: 창의성 수준 (0.0~1.0)
     """
@@ -267,11 +283,12 @@ def _call_gemini(full_message, system_prompt, model_key='gemini-pro', temperatur
         print(f"   model_key: {model_key}")
         print(f"   model: {model}")
         print(f"   temperature: {temperature}")
+        print(f"   messages: {len(messages)} turns")
         print("="*80)
         
         response = client.models.generate_content(
             model=model,
-            contents=full_message,
+            contents=messages,  # Native History: 리스트 전달
             config=types.GenerateContentConfig(
                 systemInstruction=system_prompt,
                 temperature=temperature,
@@ -307,15 +324,16 @@ def _call_gemini(full_message, system_prompt, model_key='gemini-pro', temperatur
 
 
 def _call_gpt(full_message, system_prompt, temperature=0.7):
-    """GPT-4o API 호출 (OpenAI)"""
+    """GPT API 호출 (OpenAI)"""
     if not settings.AI_MODELS['gpt']['enabled']:
         raise Exception("GPT not initialized")
     
     client = settings.GPT_CLIENT
+    model = settings.AI_MODELS['gpt']['model']  # 설정에서 모델명 가져오기
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=model,  # 동적으로 설정된 모델 사용
             messages=[
                 {"role": "system", "content": f"{system_prompt}\n\n반드시 다음 JSON 형식으로만 응답하세요:\n{json.dumps(settings.AI_RESPONSE_SCHEMA, ensure_ascii=False, indent=2)}"},
                 {"role": "user", "content": full_message}
@@ -328,7 +346,7 @@ def _call_gpt(full_message, system_prompt, temperature=0.7):
         content = response.choices[0].message.content
         result = json.loads(content)
         result['_model'] = 'gpt'
-        result['_model_version'] = 'gpt-4o'
+        result['_model_version'] = model  # 실제 모델명 기록
         
         # 스키마 검증
         return validate_ai_response(result)

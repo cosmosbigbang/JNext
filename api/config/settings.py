@@ -246,17 +246,17 @@ AI_MODELS = {
     },
     'gemini-pro': {
         'enabled': GEMINI_INITIALIZED,
-        'model': 'models/gemini-2.0-flash-exp',  # Gemini Pro 실험 버전
+        'model': 'models/gemini-2.5-pro',  # Gemini 2.5 Pro
         'client': GEMINI_CLIENT,
         'strengths': ['정확성', '추론', '분석'],
         'display_name': 'Gemini Pro (정확)',
     },
     'gpt': {
         'enabled': GPT_INITIALIZED,
-        'model': 'gpt-4o',
+        'model': 'gpt-5.2',
         'client': GPT_CLIENT,
         'strengths': ['창의성', '추론', '코딩'],
-        'display_name': 'GPT-4o (진)',
+        'display_name': 'GPT-5.2 (진)',
     },
     'claude': {
         'enabled': CLAUDE_INITIALIZED,

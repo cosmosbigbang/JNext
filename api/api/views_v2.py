@@ -62,8 +62,11 @@ def chat_v2(request):
         user_message = data.get('message', '').strip()
         model = data.get('model', 'gemini-pro')  # 기본 Pro 유지 (품질 우선)
         project_id = data.get('project', None)  # None = 일반 대화
-        temperature = float(data.get('temperature', 0.85))  # 0.0-1.0
-        db_focus = int(data.get('db_focus', 10))  # 0-100 (기본 10%)
+        temperature = float(data.get('temperature', 0.9))  # 0.9로 조정
+        
+        # DB 사용 여부 (on/off)
+        use_db = data.get('db', False)  # 기본값: off
+        db_focus = 100 if use_db else 0
         
         if not user_message:
             return JsonResponse({'error': 'Message is required'}, status=400)
@@ -71,7 +74,7 @@ def chat_v2(request):
         print(f"\n[JNext v2] User: {user_message}")
         print(f"[JNext v2] Project: {project_id or '일반 대화'}")
         print(f"[JNext v2] Temperature: {temperature}")
-        print(f"[JNext v2] DB Focus: {db_focus}%")
+        print(f"[JNext v2] DB: {'🟢 ON' if use_db else '⚫ OFF'}")
         print(f"[JNext v2] Model: {model}")
         
         # 1. 사용자 메시지 즉시 저장 (백업)
@@ -98,21 +101,24 @@ def chat_v2(request):
             if project:
                 project_prompt = project.get_system_prompt()
                 
-                # 사용자 메시지에서 키워드 추출 (특수문자 제거)
-                # "하이노워밍팔돌리기가 뭐지" → "하이노워밍팔돌리기 뭐지"
-                import re
-                keyword = re.sub(r'[?!.,\s]+', ' ', user_message).strip()
-                # 너무 길면 첫 50자만
-                if len(keyword) > 50:
-                    keyword = keyword[:50]
-                
-                project_db_context = project.get_db_context(limit=100, keyword=keyword)
-                
-                print(f"[JNext v2] Project loaded: {project.display_name}")
-                if keyword:
-                    print(f"[JNext v2] Keyword search: {keyword}")
-                print(f"[JNext v2] DB context length: {len(project_db_context)} chars")
-                print(f"[JNext v2] DB context preview: {project_db_context[:200]}...")
+                # DB Focus가 0%보다 클 때만 DB Context 가져오기
+                if db_focus > 0:
+                    # 사용자 메시지에서 키워드 추출 (특수문자 제거)
+                    # "하이노워밍팔돌리기가 뭐지" → "하이노워밍팔돌리기 뭐지"
+                    keyword = re.sub(r'[?!.,\s]+', ' ', user_message).strip()
+                    # 너무 길면 첫 50자만
+                    if len(keyword) > 50:
+                        keyword = keyword[:50]
+                    
+                    project_db_context = project.get_db_context(limit=100, keyword=keyword)
+                    
+                    print(f"[JNext v2] Project loaded: {project.display_name}")
+                    if keyword:
+                        print(f"[JNext v2] Keyword search: {keyword}")
+                    print(f"[JNext v2] DB context length: {len(project_db_context)} chars")
+                    print(f"[JNext v2] DB context preview: {project_db_context[:200]}...")
+                else:
+                    print(f"[JNext v2] Project loaded: {project.display_name} (DB Context: 0%)")
             else:
                 print(f"[JNext v2] Warning: Project '{project_id}' not found")
         
@@ -138,11 +144,11 @@ def chat_v2(request):
             try:
                 ai_response = call_ai_model(
                     model_name=model,
-                    user_message=context['full_message'],
+                    user_message=user_message,  # 현재 질문만 (맥락 제거)
                     system_prompt=context['system_prompt'],
-                    db_context="",  # 이미 full_message에 포함됨
+                    db_context=project_db_context if db_focus > 0 else "",  # DB Context 직접 전달
                     mode='v2',
-                    conversation_history=[],  # 이미 full_message에 포함됨
+                    conversation_history=conversation_history,  # 🔥 대화 이력 전체 전달!
                     temperature=context['temperature']
                 )
                 break
@@ -184,6 +190,8 @@ def chat_v2(request):
                 try:
                     from .raw_storage import evaluate_chat_value, analyze_and_save_raw
                     
+                    print(f"[JNext v2] RAW 저장 시도: project_id={project_id}")
+                    
                     # 2단계: 가치 평가 (관대하게)
                     is_valuable = evaluate_chat_value(user_message, ai_answer)
                     
@@ -200,7 +208,9 @@ def chat_v2(request):
                     else:
                         print(f"[JNext v2] 잡담으로 판단, RAW 저장 스킵")
                 except Exception as e:
+                    import traceback
                     print(f"[JNext v2] RAW 저장 실패: {e}")
+                    print(traceback.format_exc())
             
             return JsonResponse({
                 'status': 'success',
@@ -384,7 +394,6 @@ def create_project(request):
             }, status=400)
         
         # ID 유효성 검사 (영문소문자+언더스코어만)
-        import re
         if not re.match(r'^[a-z_]+$', project_id):
             return JsonResponse({
                 'status': 'error',
@@ -507,6 +516,12 @@ def search_documents(request):
                     exercise_name = data.get('exercise_name') or data.get('제목') or title or ''
                     keywords = data.get('키워드') or ''
                     
+                    # 키워드가 리스트면 문자열로 변환
+                    if isinstance(keywords, list):
+                        keywords = ' '.join(keywords)
+                    elif not isinstance(keywords, str):
+                        keywords = str(keywords)
+                    
                     # 검색 타입에 따라 필터링
                     if keyword:
                         match = False
@@ -604,7 +619,6 @@ def update_document(request):
             # ** 제거
             text = text.replace('**', '')
             # ## 제거
-            import re
             text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
             return text
         

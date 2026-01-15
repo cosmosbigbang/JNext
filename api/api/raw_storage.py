@@ -4,76 +4,40 @@ Phase 3: AI 평가 및 RAW 저장 함수
 from firebase_admin import firestore
 from datetime import datetime, timezone, timedelta
 import json
+import re
+import logging
 from django.conf import settings
 
+logger = logging.getLogger(__name__)
 KST = timezone(timedelta(hours=9))
 
 
 def evaluate_chat_value(user_message: str, ai_response: str) -> bool:
     """
-    대화 가치 평가 (관대한 필터링)
+    응답 저장 여부 판단 (거의 모두 저장, 극소수만 스킵)
     
     Args:
-        user_message: 사용자 메시지
+        user_message: 사용자 메시지 (참고용)
         ai_response: AI 응답
     
     Returns:
         bool: True (저장), False (스킵)
     """
-    # 1단계: 명백한 잡담 키워드 체크
-    trivial_keywords = [
-        "안녕", "ㅎㅎㅎ", "ㅋㅋㅋ", "ㄱㅅ", "고마워", "감사",
-        "좋아", "알겠어", "응", "ㅇㅇ", "넵", "오케이"
-    ]
+    # 명백한 시스템 에러만 스킵 (나머지는 모두 저장)
     
-    message_lower = user_message.lower().strip()
-    
-    # 메시지가 5자 이하이고 잡담 키워드에 해당
-    if len(message_lower) <= 5 and any(kw in message_lower for kw in trivial_keywords):
-        print(f"[평가] 명백한 잡담: {user_message[:20]}")
+    # 1. 빈 응답
+    if not ai_response or len(ai_response.strip()) < 10:
+        print(f"[평가] 빈 응답 - 스킵")
         return False
     
-    # 2단계: 애매한 경우 AI에게 물어보기 (매우 관대)
-    try:
-        if not settings.AI_MODELS['gemini-flash']['enabled']:
-            # AI 없으면 무조건 저장 (안전)
-            return True
-        
-        client = settings.AI_MODELS['gemini-flash']['client']
-        model = settings.AI_MODELS['gemini-flash']['model']
-        
-        prompt = f"""다음 대화가 프로젝트 RAW 데이터로 저장할 가치가 있는지 평가하세요.
-
-사용자: {user_message}
-AI: {ai_response[:200]}...
-
-**판단 기준:**
-- 명백한 인사/감탄사/단순 반응만 no
-- 질문, 아이디어, 의견, 피드백, 분석 요청 등은 모두 yes
-- **애매하면 무조건 yes** (중요한 내용 놓치면 안 됨)
-
-답변: yes 또는 no만 출력하세요."""
-
-        from google.genai import types
-        
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-                maxOutputTokens=100,
-            )
-        )
-        
-        result = response.text.strip().lower()
-        is_valuable = 'yes' in result
-        
-        print(f"[평가] AI 판단: {result} -> {'저장' if is_valuable else '스킵'}")
-        return is_valuable
-        
-    except Exception as e:
-        print(f"[평가] AI 평가 실패: {e}, 안전하게 저장")
-        return True  # 에러 시 안전하게 저장
+    # 2. 명백한 API 에러 메시지
+    if ai_response.startswith("Error:") or ai_response.startswith("API Error"):
+        print(f"[평가] API 에러 - 스킵")
+        return False
+    
+    # 나머지는 모두 저장 (품질은 analyze_and_save_raw에서 평가)
+    print(f"[평가] 저장 대상 ({len(ai_response)}자)")
+    return True
 
 
 def analyze_and_save_raw(project_id: str, user_message: str, ai_response: str, chat_ref: str, model: str):
@@ -130,30 +94,19 @@ AI: {ai_response}
         metadata = json.loads(response.text)
         
         # AI 자기언급 제거 (후처리)
-        import re
         ai_self_refs = r'(제가|저는|저희는|젠|젠시|진|클로|AI|어시스턴트|assistant|I am|I\'m|As an AI)'
         for key in ['제목', '요약']:
             if key in metadata and isinstance(metadata[key], str):
                 metadata[key] = re.sub(ai_self_refs, '', metadata[key], flags=re.IGNORECASE)
                 metadata[key] = re.sub(r'\s+', ' ', metadata[key]).strip()  # 공백 정리
         
-        # 하이노밸런스 작명법: 하이노 + 카테고리 + 동작명은 모두 붙여쓰기
+        # 하이노밸런스 작명법: 제목 전체 붙여쓰기 (띄어쓰기 제거)
         if '제목' in metadata:
             title = metadata['제목']
-            # '하이노'로 시작하면 특수문자 전까지 모든 띄어쓰기 제거
-            if '하이노' in title:
-                # 특수문자 기준으로 분리
-                parts = re.split(r'([:\.,!\?])', title)
-                result = []
-                for part in parts:
-                    if '하이노' in part:
-                        # 하이노가 포함된 부분은 모든 띄어쓰기 제거
-                        result.append(part.replace(' ', ''))
-                    else:
-                        result.append(part)
-                metadata['제목'] = ''.join(result)
+            # 모든 띄어쓰기 제거
+            metadata['제목'] = title.replace(' ', '')
         
-        # 🔍 품질 검증: 일반론/엉터리 감지
+        # 🔍 품질 검증: 일반론/엉터리 감지 (강화)
         quality_issues = []
         
         # 1. J님 원본 키워드 누락 체크
@@ -165,35 +118,59 @@ AI: {ai_response}
         if len(missing_keywords) > 5:
             quality_issues.append(f"J님 키워드 {len(missing_keywords)}개 누락")
         
-        # 2. 일반론 키워드 감지
+        # 2. 일반론 키워드 감지 (강화)
         generic_phrases = [
             '일반적으로', '보통', '대체로', '흔히', '전형적으로',
             '접근성', '비용 효율', '경쟁력', '생존 가능성',
             '파트너십', '게임 요소', '사용자 경험',
-            '여러 의미', '다양한 해석', '맥락에 따라'
+            '여러 의미', '다양한 해석', '맥락에 따라',
+            '전신 신경계 활성화', '균형 감각', '코어 안정성',  # 하이노 일반론
+            '협응력 향상', '신체 인지 능력', '근육 활성화'  # 추상적 표현
         ]
         generic_count = sum(1 for phrase in generic_phrases if phrase in ai_response)
         if generic_count >= 3:
             quality_issues.append(f"일반론 키워드 {generic_count}개 감지")
         
-        # 3. 너무 짧은 답변
-        if len(ai_response) < 200:
-            quality_issues.append("답변 너무 짧음")
+        # 3. 구조화된 답변 확인 (필수 필드 체크)
+        required_keywords = ['타겟', '효과', '타이밍']
+        missing_structure = [kw for kw in required_keywords if kw not in ai_response]
+        if missing_structure:
+            quality_issues.append(f"필수 구조 누락: {', '.join(missing_structure)}")
+        
+        # 4. 너무 짧은 답변
+        if len(ai_response) < 300:
+            quality_issues.append("답변 너무 짧음 (300자 미만)")
+        
+        # 5. 구체성 체크 (화살표 표현 있는지)
+        if '→' not in ai_response and '->' not in ai_response:
+            quality_issues.append("구체적 메커니즘 설명 부족 (화살표 없음)")
         
         # 품질 점수 계산 (0~100)
         quality_score = 100
         quality_score -= len(missing_keywords) * 2  # 누락 키워드당 -2점
         quality_score -= generic_count * 10  # 일반론당 -10점
+        quality_score -= len(missing_structure) * 15  # 구조 누락당 -15점
+        if len(ai_response) < 300:
+            quality_score -= 30
+        if '→' not in ai_response and '->' not in ai_response:
+            quality_score -= 20
         if len(ai_response) < 200:
             quality_score -= 30
         
         quality_score = max(0, quality_score)
         
+        # 품질 점수 로깅 (저장은 진행, J님이 점수 확인 후 기준 조정)
+        if quality_score < 60:
+            logger.warning(f"[품질 낮음] {quality_score}점 (기준 60점)")
+            logger.warning(f"[품질 문제] {', '.join(quality_issues)}")
+        
         # Firestore 저장
         db = firestore.client()
-        now = datetime.now(KST)
-        timestamp = now.strftime('%Y%m%d_%H%M%S_%f')
-        doc_id = f"{timestamp}"
+        # UTC → KST 변환 (명확하게)
+        now_utc = datetime.now(timezone.utc)
+        now = now_utc.astimezone(KST)
+        timestamp_str = now.strftime('%Y%m%d_%H%M%S_%f')
+        doc_id = f"{timestamp_str}"
         
         raw_data = {
             'id': doc_id,
@@ -207,7 +184,8 @@ AI: {ai_response}
             '요약': metadata.get('요약', ''),
             'chat_ref': chat_ref,
             'project_id': project_id,
-            'timestamp': now,
+            'timestamp': now,  # Firestore Timestamp (UTC 자동 변환)
+            'timestamp_kst': timestamp_str,  # KST 문자열 (한국 시간 표시용)
             '작성자': 'J님',
             '모델': model,
             # 품질 메타데이터

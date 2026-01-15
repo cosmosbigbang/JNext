@@ -3,6 +3,7 @@ HinoBalance Project
 하이노밸런스 프로젝트 설정
 """
 
+import re
 from .base import BaseProject
 from firebase_admin import firestore
 
@@ -33,48 +34,8 @@ class HinoBalanceProject(BaseProject):
     ]
     
     def get_system_prompt(self) -> str:
-        """하이노밸런스 시스템 프롬프트 (진·젠 축소 버전)"""
-        return """당신은 J님과 함께 하이노밸런스를 개발한 AI입니다.
-
-【정의】
-가속도 제어와 편측성 불안정을 이용한 신경계 재배열 운동
-- 핵심: 근력 아닌 움직임 제어, 신경계 재배열, 에너지 흐름
-- 차별: 웨이트(근비대) vs 필라테스(정렬) vs 하이노(관성·신경)
-
-【철학】
-- 불균형=신호(오류 아님), 균형=과정(목표 아님)
-- 한발=생명, 두발=정지=죽음
-- 흔들림→정보, 무너짐→피드백, 리셋→업데이트
-
-【J님 맥락】
-9개월 GPT 개발 → GPT 다운 사고 → 허리 통증
-타이핑으로 어깨/목 악화, 즉시 효과 중시
-
-【톤】
-중립·차분·과장 없음
-"~하면 됩니다" ❌ → "~로 이어집니다" ✅
-"J님" 호칭 (절대 "사용자" 금지)
-
-【출력】
-숫자 목록 1.2.3. (마크다운 **##-`> 금지)
-점수 X/10 + 한 줄 정의
-"견갑 고정 해제→경추 정체 제거" (추상 금지)
-
-【개별성 우선】 ★ 가장 중요
-이 운동만의 타겟·효과·타이밍 명시
-일반론(불안정성, 가속도) 나열 금지
-
-【금지】
-근비대, 지방연소, 의학 진단/치료
-
-【안전 지침】
-- 정지 시간: 실력에 맞춰 2초→3초→5초 조절
-- 무너지면 즉시 리셋 (버티지 않음)
-- 하루 컨디션 따라 자동 강도 조절
-
-【마지막 옵션】
-모든 동작 설명 끝에 "눈 감고 3-5초 동작 재현" 제시
-"""
+        """하이노밸런스 시스템 프롬프트 (모바일 디폴트: 없음)"""
+        return ""
     
     def get_menu_structure(self):
         """
@@ -200,15 +161,22 @@ class HinoBalanceProject(BaseProject):
         Args:
             limit: 최대 문서 수
             category: 특정 카테고리 필터 (옵션)
-            keyword: 키워드 검색 (제목, 내용에서 검색, 띄어쓰기 무시)
+            keyword: 키워드 검색 (제목, 내용에서 검색, 띄어쓰기 무시, OR 검색)
             
         Returns:
             str: DB 컨텍스트 (모든 컬렉션 통합)
         """
         db = firestore.client()
         
-        # 키워드 정규화 (띄어쓰기 제거)
-        normalized_keyword = keyword.replace(' ', '').lower() if keyword else None
+        # 키워드 정규화 및 분리 (띄어쓰기 제거, 단어별 분리)
+        normalized_keywords = []
+        if keyword:
+            # 띄어쓰기와 특수문자로 분리
+            words = re.split(r'[\s,\.]+', keyword)
+            for word in words:
+                clean_word = word.replace(' ', '').lower().strip()
+                if len(clean_word) > 1:  # 1글자 단어는 제외
+                    normalized_keywords.append(clean_word)
         
         context_parts = []
         # 우선순위 순서: 최종 → 초안 → 원본 (상하위 구조)
@@ -252,13 +220,19 @@ class HinoBalanceProject(BaseProject):
                     if not content:
                         continue
                     
-                    # 키워드 검색 (띄어쓰기 제거 후 비교)
-                    if normalized_keyword:
+                    # 키워드 검색 (OR 조건: 단어 중 하나라도 매칭되면 포함)
+                    if normalized_keywords:
                         normalized_title = title.replace(' ', '').lower()
                         normalized_content = content.replace(' ', '').lower()
                         
-                        if (normalized_keyword not in normalized_title and 
-                            normalized_keyword not in normalized_content):
+                        # 키워드 중 하나라도 제목 또는 내용에 있으면 포함
+                        matched = False
+                        for kw in normalized_keywords:
+                            if kw in normalized_title or kw in normalized_content:
+                                matched = True
+                                break
+                        
+                        if not matched:
                             continue
                     
                     doc_count += 1
@@ -286,7 +260,7 @@ class HinoBalanceProject(BaseProject):
                 continue
         
         if not context_parts:
-            if normalized_keyword:
+            if normalized_keywords:
                 return f"[하이노밸런스 DB에서 '{keyword}' 관련 데이터를 찾을 수 없습니다]"
             return "[하이노밸런스 DB에 데이터가 없습니다]"
         
