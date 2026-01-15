@@ -10,6 +10,7 @@ from django.shortcuts import render
 from firebase_admin import firestore
 from datetime import datetime, timezone, timedelta
 import json
+import re
 
 from .core.context_manager import ContextManager
 from .projects.project_manager import project_manager
@@ -18,6 +19,32 @@ from .views import save_chat_history, load_chat_history, now_kst
 
 # 한국 시간대
 KST = timezone(timedelta(hours=9))
+
+
+def remove_markdown_formatting(text):
+    """
+    마크다운 문법 제거 (볼드, 헤더 등)
+    숫자 목록 (1. 2. 3.)은 유지
+    """
+    if not text:
+        return text
+    
+    # **볼드** 제거
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+    
+    # ## 헤더 제거 (줄 시작 기준)
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    
+    # ` 코드 ` 제거
+    text = re.sub(r'`([^`]+)`', r'\1', text)
+    
+    # > 인용 제거
+    text = re.sub(r'^>\s+', '', text, flags=re.MULTILINE)
+    
+    # - 또는 * 리스트 → 숫자 목록으로 변환하지 않고 그냥 제거
+    text = re.sub(r'^[\*\-]\s+', '', text, flags=re.MULTILINE)
+    
+    return text
 
 
 @csrf_exempt
@@ -33,10 +60,10 @@ def chat_v2(request):
         # 요청 파싱
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
-        model = data.get('model', 'gemini-pro')
+        model = data.get('model', 'gemini-pro')  # 기본 Pro 유지 (품질 우선)
         project_id = data.get('project', None)  # None = 일반 대화
         temperature = float(data.get('temperature', 0.85))  # 0.0-1.0
-        db_focus = int(data.get('db_focus', 25))  # 0-100
+        db_focus = int(data.get('db_focus', 10))  # 0-100 (기본 10%)
         
         if not user_message:
             return JsonResponse({'error': 'Message is required'}, status=400)
@@ -58,8 +85,8 @@ def chat_v2(request):
             project_context=project_id
         )
         
-        # 2. 대화 기록 로드
-        conversation_history = load_chat_history(limit=20)
+        # 2. 대화 기록 로드 (모바일 AI 수준으로 확장)
+        conversation_history = load_chat_history(limit=100)
         
         # 3. 프로젝트 정보 가져오기
         project = None
@@ -125,10 +152,14 @@ def chat_v2(request):
         if ai_response:
             ai_answer = ai_response.get('answer', '')
             
+            # 마크다운 제거
+            ai_answer_clean = remove_markdown_formatting(ai_answer)
+            ai_response['answer'] = ai_answer_clean
+            
             # AI 응답 저장
             save_chat_history(
                 role='assistant',
-                content=ai_answer,
+                content=ai_answer_clean,
                 mode='v2',
                 model=model,
                 temperature=temperature,
@@ -149,7 +180,7 @@ def chat_v2(request):
                         analyze_and_save_raw(
                             project_id=project_id,
                             user_message=user_message,
-                            ai_response=ai_answer,
+                            ai_response=ai_answer_clean,
                             chat_ref=chat_id,
                             model=model
                         )
@@ -404,95 +435,111 @@ def search_documents(request):
         
         # Firestore에서 직접 가져오기
         db = firestore.client()
-        docs_ref = db.collection('projects').document(project_id).collection(collection)
-        docs = docs_ref.limit(50).stream()
+        
+        # '전체' 컬렉션이면 raw, draft, final 모두 검색
+        collections_to_search = []
+        if collection in ['전체', 'all', '']:
+            collections_to_search = ['raw', 'draft', 'final']
+        else:
+            collections_to_search = [collection]
         
         results = []
-        for doc in docs:
-            data = doc.to_dict()
-            
-            # 모든 가능한 필드명 시도 (우선순위 순서)
-            title = (data.get('제목') or data.get('title') or 
-                    data.get('exercise_name') or data.get('doc_id') or 
-                    doc.id)
-            
-            # 내용 필드 우선순위
-            content = (data.get('final_refined') or  # 최종 정제본
-                      data.get('refined') or         # 정제본
-                      data.get('organized_content') or  # 정리된 내용
-                      data.get('content') or         # 기본 내용
-                      data.get('정리본') or
-                      data.get('ai_응답') or
-                      data.get('내용') or
-                      data.get('전체글') or
-                      data.get('요약') or
-                      '')
-            
-            # content가 boolean이면 문자열로 변환
-            if isinstance(content, bool):
-                content = ''
-            elif not isinstance(content, str):
-                content = str(content)
-            
-            # 원본 내용 (J님 입력)
-            original = (data.get('J님원본') or 
-                       data.get('원본') or
-                       data.get('original_content') or
-                       data.get('원본질문') or
-                       '')
-            
-            # original도 boolean 체크
-            if isinstance(original, bool):
-                original = ''
-            elif not isinstance(original, str):
-                original = str(original)
-            
-            # 카테고리와 운동명
-            category = data.get('카테고리') or data.get('category') or ''
-            exercise_name = data.get('exercise_name') or data.get('제목') or title or ''
-            keywords = data.get('키워드') or ''
-            
-            # 검색 타입에 따라 필터링
-            if keyword:
-                match = False
-                keyword_lower = keyword.lower()
+        
+        for coll_name in collections_to_search:
+            try:
+                # projects/hinobalance/raw, draft, final 각각 검색
+                docs_ref = db.collection('projects').document(project_id).collection(coll_name)
+                docs = docs_ref.limit(50).stream()
                 
-                if search_type == 'category':
-                    # 카테고리 검색
-                    match = keyword_lower in category.lower()
-                elif search_type == 'exercise':
-                    # 운동명 검색
-                    match = keyword_lower in exercise_name.lower()
-                elif search_type == 'keyword':
-                    # 키워드 필드 검색
-                    match = keyword_lower in keywords.lower()
-                else:  # 'all'
-                    # 전체 검색 (제목, 내용, 카테고리, 운동명, 키워드)
-                    match = (keyword_lower in title.lower() or 
-                            keyword_lower in content.lower() or
-                            keyword_lower in category.lower() or
-                            keyword_lower in exercise_name.lower() or
-                            keyword_lower in keywords.lower())
-                
-                if not match:
-                    continue
-            
-            results.append({
-                'id': doc.id,
-                'collection': collection,
-                '제목': title,
-                '내용': content[:200] + '...' if len(content) > 200 else content,
-                '내용전체': content,
-                'J님원본': original,
-                '생성일': str(data.get('생성일') or data.get('작성일시') or data.get('created_at') or data.get('timestamp') or ''),
-                'ai모델': data.get('ai모델') or data.get('모델') or data.get('model') or '',
-                '품질점수': data.get('품질점수', 0),
-                '검증필요': data.get('검증필요', False),
-                'category': data.get('카테고리') or data.get('category') or '',
-                'exercise_name': data.get('exercise_name') or '',
-                '요약': data.get('요약') or '',
-                '키워드': data.get('키워드') or ''
-            })
+                for doc in docs:
+                    data = doc.to_dict()
+                    
+                    # 모든 가능한 필드명 시도 (우선순위 순서)
+                    title = (data.get('제목') or data.get('title') or 
+                            data.get('exercise_name') or data.get('doc_id') or 
+                            doc.id)
+                    
+                    # 내용 필드 우선순위
+                    content = (data.get('final_refined') or  # 최종 정제본
+                              data.get('refined') or         # 정제본
+                              data.get('organized_content') or  # 정리된 내용
+                              data.get('content') or         # 기본 내용
+                              data.get('정리본') or
+                              data.get('ai_응답') or
+                              data.get('내용') or
+                              data.get('전체글') or
+                              data.get('요약') or
+                              '')
+                    
+                    # content가 boolean이면 문자열로 변환
+                    if isinstance(content, bool):
+                        content = ''
+                    elif not isinstance(content, str):
+                        content = str(content)
+                    
+                    # 원본 내용 (J님 입력)
+                    original = (data.get('J님원본') or 
+                               data.get('원본') or
+                               data.get('original_content') or
+                               data.get('원본질문') or
+                               '')
+                    
+                    # original도 boolean 체크
+                    if isinstance(original, bool):
+                        original = ''
+                    elif not isinstance(original, str):
+                        original = str(original)
+                    
+                    # 카테고리와 운동명
+                    category = data.get('카테고리') or data.get('category') or ''
+                    exercise_name = data.get('exercise_name') or data.get('제목') or title or ''
+                    keywords = data.get('키워드') or ''
+                    
+                    # 검색 타입에 따라 필터링
+                    if keyword:
+                        match = False
+                        keyword_lower = keyword.lower()
+                        
+                        if search_type == 'category':
+                            # 카테고리 검색
+                            match = keyword_lower in category.lower()
+                        elif search_type == 'exercise':
+                            # 운동명 검색
+                            match = keyword_lower in exercise_name.lower()
+                        elif search_type == 'keyword':
+                            # 키워드 필드 검색
+                            match = keyword_lower in keywords.lower()
+                        else:  # 'all'
+                            # 전체 검색 (제목, 내용, 카테고리, 운동명, 키워드)
+                            match = (keyword_lower in title.lower() or 
+                                    keyword_lower in content.lower() or
+                                    keyword_lower in category.lower() or
+                                    keyword_lower in exercise_name.lower() or
+                                    keyword_lower in keywords.lower())
+                        
+                        if not match:
+                            continue
+                    
+                    results.append({
+                        'id': doc.id,
+                        'collection': coll_name,  # 실제 컬렉션 이름
+                        '제목': title,
+                        '내용': content[:200] + '...' if len(content) > 200 else content,
+                        '내용전체': content,
+                        'J님원본': original,
+                        '생성일': str(data.get('생성일') or data.get('작성일시') or data.get('created_at') or data.get('timestamp') or ''),
+                        'ai모델': data.get('ai모델') or data.get('모델') or data.get('model') or '',
+                        '품질점수': data.get('품질점수', 0),
+                        '검증필요': data.get('검증필요', False),
+                        'category': data.get('카테고리') or data.get('category') or '',
+                        'exercise_name': data.get('exercise_name') or '',
+                        '요약': data.get('요약') or '',
+                        '키워드': data.get('키워드') or ''
+                    })
+                    
+            except Exception as e:
+                print(f"[검색] {coll_name} 컬렉션 오류: {e}")
+                continue
         
         print(f"[검색] 완료: {len(results)}개")
         
@@ -636,7 +683,15 @@ def regenerate_document(request):
         # 프로젝트 전체 맥락 가져오기 (고급 재생성)
         project = project_manager.get_project(project_id)
         system_prompt = project.get_system_prompt() if project else ""
-        db_context = project.get_db_context(limit=30) if project else ""  # 전체 맥락 30개 문서
+        
+        # RAW → DRAFT 정리 시: DB 100% + gemini-pro 사용
+        if collection == 'raw':
+            db_context = project.get_db_context(limit=100) if project else ""  # DB 100%
+            model_to_use = 'gemini-pro'  # Pro 모델 고정
+            print(f"[RAW→DRAFT 정리 모드] DB 100%, gemini-pro 사용")
+        else:
+            db_context = project.get_db_context(limit=30) if project else ""  # 일반 재생성은 30개
+            model_to_use = 'gemini-pro'
         
         # AI로 재생성 (프로젝트 맥락 활용)
         prompt = f"""다음 내용을 프로젝트 전체 맥락을 고려하여 더 전문적으로 재분석해주세요:
@@ -652,7 +707,7 @@ def regenerate_document(request):
 - 강조는 「」 또는 '' 사용"""
         
         ai_response = call_ai_model(
-            model_name='gemini-pro',
+            model_name=model_to_use,  # RAW→DRAFT일 때 gemini-pro 사용
             user_message=prompt,
             system_prompt=system_prompt + "\n\n절대 규칙: 마크다운 문법(**, ##, -, ` 등) 사용 금지. 평문으로만 작성.",
             db_context=db_context,  # 프로젝트 전체 DB 맥락 제공
@@ -662,6 +717,9 @@ def regenerate_document(request):
         )
         
         new_content = ai_response.get('answer', '')
+        
+        # 마크다운 제거 (만약 AI가 무시했을 경우 대비)
+        new_content = remove_markdown_formatting(new_content)
         
         # 바로 저장하지 않고 결과만 반환 (프론트에서 미리보기 + 피드백)
         print(f"[문서 재생성 미리보기] projects/{project_id}/{collection}/{doc_id}")
@@ -758,6 +816,10 @@ def apply_regeneration(request):
             )
             
             final_content = ai_response.get('answer', new_content)
+            
+            # 마크다운 제거 (만약 AI가 무시했을 경우 대비)
+            final_content = remove_markdown_formatting(final_content)
+            
             print(f"[재생성 피드백 적용] {feedback[:50]}...")
         else:
             final_content = new_content
