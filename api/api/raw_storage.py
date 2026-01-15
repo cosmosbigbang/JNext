@@ -137,6 +137,22 @@ AI: {ai_response}
                 metadata[key] = re.sub(ai_self_refs, '', metadata[key], flags=re.IGNORECASE)
                 metadata[key] = re.sub(r'\s+', ' ', metadata[key]).strip()  # 공백 정리
         
+        # 하이노밸런스 작명법: 하이노 + 카테고리 + 동작명은 모두 붙여쓰기
+        if '제목' in metadata:
+            title = metadata['제목']
+            # '하이노'로 시작하면 특수문자 전까지 모든 띄어쓰기 제거
+            if '하이노' in title:
+                # 특수문자 기준으로 분리
+                parts = re.split(r'([:\.,!\?])', title)
+                result = []
+                for part in parts:
+                    if '하이노' in part:
+                        # 하이노가 포함된 부분은 모든 띄어쓰기 제거
+                        result.append(part.replace(' ', ''))
+                    else:
+                        result.append(part)
+                metadata['제목'] = ''.join(result)
+        
         # 🔍 품질 검증: 일반론/엉터리 감지
         quality_issues = []
         

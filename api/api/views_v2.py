@@ -98,17 +98,13 @@ def chat_v2(request):
             if project:
                 project_prompt = project.get_system_prompt()
                 
-                # 사용자 메시지에서 키워드 추출 (띄어쓰기 제거하여 검색)
-                # "하이노워밍팔돌리기가 뭐지" → "하이노워밍팔돌리기" 추출
-                keyword = None
-                if '하이노' in user_message:
-                    # 하이노로 시작하는 단어 추출
-                    words = user_message.split()
-                    for word in words:
-                        if '하이노' in word:
-                            # 특수문자 제거
-                            keyword = word.replace('?', '').replace('!', '').replace('.', '').replace(',', '').strip()
-                            break
+                # 사용자 메시지에서 키워드 추출 (특수문자 제거)
+                # "하이노워밍팔돌리기가 뭐지" → "하이노워밍팔돌리기 뭐지"
+                import re
+                keyword = re.sub(r'[?!.,\s]+', ' ', user_message).strip()
+                # 너무 길면 첫 50자만
+                if len(keyword) > 50:
+                    keyword = keyword[:50]
                 
                 project_db_context = project.get_db_context(limit=100, keyword=keyword)
                 
