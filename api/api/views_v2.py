@@ -97,8 +97,24 @@ def chat_v2(request):
             project = project_manager.get_project(project_id)
             if project:
                 project_prompt = project.get_system_prompt()
-                project_db_context = project.get_db_context(limit=100)
+                
+                # 사용자 메시지에서 키워드 추출 (띄어쓰기 제거하여 검색)
+                # "하이노워밍팔돌리기가 뭐지" → "하이노워밍팔돌리기" 추출
+                keyword = None
+                if '하이노' in user_message:
+                    # 하이노로 시작하는 단어 추출
+                    words = user_message.split()
+                    for word in words:
+                        if '하이노' in word:
+                            # 특수문자 제거
+                            keyword = word.replace('?', '').replace('!', '').replace('.', '').replace(',', '').strip()
+                            break
+                
+                project_db_context = project.get_db_context(limit=100, keyword=keyword)
+                
                 print(f"[JNext v2] Project loaded: {project.display_name}")
+                if keyword:
+                    print(f"[JNext v2] Keyword search: {keyword}")
                 print(f"[JNext v2] DB context length: {len(project_db_context)} chars")
                 print(f"[JNext v2] DB context preview: {project_db_context[:200]}...")
             else:

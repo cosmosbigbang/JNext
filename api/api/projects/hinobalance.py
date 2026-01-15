@@ -192,7 +192,7 @@ class HinoBalanceProject(BaseProject):
         
         return contents[:limit]
     
-    def get_db_context(self, limit: int = 50, category: str = None) -> str:
+    def get_db_context(self, limit: int = 50, category: str = None, keyword: str = None) -> str:
         """
         하이노밸런스 DB 컨텍스트 가져오기
         우선순위: hino_final(최종) → hino_draft(초안) → hino_raw(원본)
@@ -200,11 +200,15 @@ class HinoBalanceProject(BaseProject):
         Args:
             limit: 최대 문서 수
             category: 특정 카테고리 필터 (옵션)
+            keyword: 키워드 검색 (제목, 내용에서 검색, 띄어쓰기 무시)
             
         Returns:
             str: DB 컨텍스트 (모든 컬렉션 통합)
         """
         db = firestore.client()
+        
+        # 키워드 정규화 (띄어쓰기 제거)
+        normalized_keyword = keyword.replace(' ', '').lower() if keyword else None
         
         context_parts = []
         # 우선순위 순서: 최종 → 초안 → 원본 (상하위 구조)
@@ -226,37 +230,53 @@ class HinoBalanceProject(BaseProject):
                 # order_by는 모든 문서에 해당 필드가 있어야 하므로 제거
                 # (기존 문서: 시간, 새 문서: timestamp - 혼재 시 에러)
                 
-                docs = query.limit(limit).stream()
+                # 키워드 검색은 클라이언트 측에서 필터링 (Firestore는 LIKE 미지원)
+                docs = query.limit(limit * 3).stream()  # 키워드 필터링 위해 더 많이 가져옴
                 doc_count = 0
                 
                 for doc in docs:
                     data = doc.to_dict()
-                    doc_count += 1
                     
                     # 문서 정보 추출 (다양한 필드명 지원 - 영문 우선)
-                    category = data.get('category') or data.get('카테고리') or 'N/A'
+                    category_text = data.get('category') or data.get('카테고리') or 'N/A'
                     title = data.get('제목') or data.get('title') or 'N/A'
                     
-                    # 내용 필드 우선순위: 전체글 > 내용 > content
+                    # 내용 필드 우선순위: 전체글 > 내용 > content > ai_응답
                     content = (data.get('전체글') or 
                               data.get('내용') or 
                               data.get('full_text') or 
                               data.get('content') or 
+                              data.get('ai_응답') or
                               '')
                     
                     if not content:
                         continue
                     
+                    # 키워드 검색 (띄어쓰기 제거 후 비교)
+                    if normalized_keyword:
+                        normalized_title = title.replace(' ', '').lower()
+                        normalized_content = content.replace(' ', '').lower()
+                        
+                        if (normalized_keyword not in normalized_title and 
+                            normalized_keyword not in normalized_content):
+                            continue
+                    
+                    doc_count += 1
+                    
                     # 컨텍스트 구성 (최대 800자)
                     doc_context = f"""
 [출처: {label}]
-카테고리: {category}
+카테고리: {category_text}
 제목: {title}
 내용:
 {content[:800]}
 {'...(생략)' if len(content) > 800 else ''}
 """
                     context_parts.append(doc_context)
+                    
+                    # limit 도달 시 중단
+                    if doc_count >= limit:
+                        break
                 
                 if doc_count > 0:
                     print(f"[HinoBalance] Loaded {doc_count} docs from projects/{self.project_id}/{subcollection}")
@@ -266,6 +286,8 @@ class HinoBalanceProject(BaseProject):
                 continue
         
         if not context_parts:
+            if normalized_keyword:
+                return f"[하이노밸런스 DB에서 '{keyword}' 관련 데이터를 찾을 수 없습니다]"
             return "[하이노밸런스 DB에 데이터가 없습니다]"
         
         return "\n\n".join(context_parts[:limit])

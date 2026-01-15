@@ -415,8 +415,10 @@
             listDiv.innerHTML = '<div class="loading">검색 중...</div>';
 
             try {
-                // RAW, DRAFT, FINAL 모두 검색
-                const collections = collection ? [collection] : ['raw', 'draft', 'final'];
+                // "전체" 선택 시 또는 빈 값이면 raw, draft, final 모두 검색
+                const collections = (collection === '전체' || collection === 'all' || !collection) 
+                    ? ['raw', 'draft', 'final'] 
+                    : [collection];
                 const promises = collections.map(col => 
                     fetch(`/api/v2/documents/search/?project=${selectedProject}&collection=${col}&keyword=${encodeURIComponent(keyword)}&search_type=${searchType}`)
                         .then(r => r.json())
