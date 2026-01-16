@@ -2,6 +2,8 @@
 하이노이론 25개 문서 통합 스크립트
 """
 import sys
+import os
+from pathlib import Path
 import firebase_admin
 from firebase_admin import credentials, firestore
 

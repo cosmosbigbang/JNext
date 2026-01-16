@@ -4,14 +4,19 @@
 - 개별 보존: 밈/시나리오/설계서 → 원본 유지
 """
 import sys
+import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
+from pathlib import Path
 
 sys.stdout.reconfigure(encoding='utf-8')
 
 if not firebase_admin._apps:
-    cred = credentials.Certificate('../jnext-service-account.json')
+    # projects/hinobalance/scripts/organize -> JNext root
+    base_dir = Path(__file__).resolve().parent.parent.parent.parent
+    cred_path = base_dir / 'jnext-service-account.json'
+    cred = credentials.Certificate(str(cred_path))
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
