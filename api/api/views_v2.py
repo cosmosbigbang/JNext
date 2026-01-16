@@ -17,6 +17,7 @@ from .projects.project_manager import project_manager
 from .ai_service import call_ai_model
 from .views import save_chat_history, load_chat_history, now_kst
 from . import ai_config # ai_config.py 임포트
+from .session_learning import check_and_auto_summarize, load_recent_learning, save_session_learning
 
 # 한국 시간대
 KST = timezone(timedelta(hours=9))
@@ -114,6 +115,24 @@ def chat_v2(request):
             print("[JNext v2] '정밀분석해' 감지. HINOBALANCE 프롬프트 사용.")
             system_prompt_to_use = ai_config.HINOBALANCE_SYSTEM_PROMPT
         
+        # 특수 명령어 "학습정리" 감지 (수동 요약)
+        elif "학습정리" in user_message:
+            if project_id and len(conversation_history) > 0:
+                from .session_learning import auto_summarize_learning
+                summary = auto_summarize_learning(conversation_history, model, project_id)
+                
+                return JsonResponse({
+                    'status': 'success',
+                    'response': {
+                        'answer': f"✅ 세션 학습 내용을 저장했습니다.\n\n{summary}"
+                    }
+                })
+            else:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': '학습 정리는 프로젝트를 선택하고 대화 후 사용하세요.'
+                }, status=400)
+        
         if project_id:
             project = project_manager.get_project(project_id)
             if project:
@@ -189,6 +208,12 @@ def chat_v2(request):
                 model=model,
                 temperature=temperature,
                 db_focus=db_focus,
+                project_context=project_id
+            )
+            
+            # 자동 학습 요약 체크 (10개마다)
+            if project_id:
+                check_and_auto_summarize(conversation_history, model, project_id)
                 project_context=project_id
             )
             

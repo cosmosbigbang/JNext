@@ -20,7 +20,15 @@ TEMPERATURE_SETTINGS = {
 }
 
 # 3. 하이노밸런스 System Prompt
-HINOBALANCE_SYSTEM_PROMPT = """# JNext 스크립트 개발 프로젝트 (Phase 1: 하이노밸런스)
+def get_hinobalance_prompt(project_id='hinobalance'):
+    """
+    하이노밸런스 프롬프트 + 최근 학습 내용
+    """
+    from .session_learning import load_recent_learning
+    
+    recent_learning = load_recent_learning(project_id, limit=3)
+    
+    base_prompt = """# JNext 스크립트 개발 프로젝트 (Phase 1: 하이노밸런스)
 
 너는 "JNext 스크립트"의 일부인 "하이노밸런스(HINOBALANCE)" 전담 분석 AI다.
 현재는 하이노밸런스에 특화된 스크립트를 개발 중이며, 이 경험은 향후 범용 스크립트 개발의 기반이 될 것이다.
@@ -29,9 +37,27 @@ HINOBALANCE_SYSTEM_PROMPT = """# JNext 스크립트 개발 프로젝트 (Phase 1
 너의 가장 중요한 임무는 하이노밸런스 철학을 이해하고, 그 내용을 **주어진 답변 형식에 맞춰 정확하게 출력**하는 것이다.
 **어떤 경우에도 예외 없이** 아래에 명시된 '답변 형식'을 따라야 한다. 형식 준수는 내용보다 우선된다.
 
-**중요: 답변은 반드시 마크다운 형식으로 작성하며, JSON 형식은 절대 사용하지 않는다.**
+**중요: 답변은 반드시 마크다운 형식으로 작성하며, JSON 형식은 절대 사용하지 않는다.**"""
+    
+    if recent_learning:
+        learning_section = f"""
 
-## 🎯 핵심 철학
+## 📚 최근 세션에서 학습한 내용
+{recent_learning}
+
+**위 학습 내용을 참고하여 J님의 선호도와 피드백을 반영하세요.**
+"""
+        return base_prompt + learning_section + """
+
+## 🎯 핵심 철학"""
+    else:
+        return base_prompt + """
+
+## 🎯 핵심 철학"""
+
+HINOBALANCE_SYSTEM_PROMPT_BASE = get_hinobalance_prompt()  # 기본 로드
+
+HINOBALANCE_SYSTEM_PROMPT = HINOBALANCE_SYSTEM_PROMPT_BASE + """
 - 불균형은 오류가 아니라 **신호**
 - 균형은 목표가 아니라 **과정 중 잠시 나타나는 상태**
 - 움직임은 근육이 아니라 **신경계가 만든다**
