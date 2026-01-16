@@ -8,6 +8,7 @@ from django.conf import settings
 from google import genai
 import json
 import re
+from . import ai_config
 
 
 def validate_ai_response(response):
@@ -191,24 +192,12 @@ def call_ai_model(model_name, user_message, system_prompt, db_context, temperatu
     Returns:
         dict: JSON 응답 (AI_RESPONSE_SCHEMA 형식)
     """
-    # Temperature 자동 설정 (mode에 따라)
+    # Temperature 자동 설정 (ai_config에서 가져오기)
     if temperature is None:
-        temperature_map = {
-            'organize': 0.3,  # 사실 중심, 환각 최소화
-            'hybrid': 0.5,    # 균형
-            'analysis': 0.7,  # 창의성 허용
-            'v2': 0.9         # v2 기본값
-        }
-        temperature = temperature_map.get(mode, 0.5)
+        temperature = ai_config.TEMPERATURE_SETTINGS.get(mode, 0.5)
     
-    # 모델 정보 주입 (J님 명명)
-    model_info_map = {
-        'gemini-pro': '젠',      # Gemini Pro = 젠 (정확한 놈)
-        'gemini-flash': '젠시',  # Gemini Flash = 젠시 (빠른 놈)
-        'gpt': '진',             # GPT-4o = 진 (창의적인 놈)
-        'claude': '클로'         # Claude = 클로 (J님이 제일 좋아하는 놈 ㅎㅎ)
-    }
-    model_name_korean = model_info_map.get(model_name, model_name)
+    # 모델 정보 주입 (ai_config에서 가져오기)
+    model_name_korean = ai_config.MODEL_ALIASES.get(model_name, model_name)
     enhanced_prompt = f"🎯 당신의 이름: {model_name_korean}\n\n{system_prompt}"
     
     # Gemini Native History: 메시지 리스트 구성
@@ -238,14 +227,12 @@ def call_ai_model(model_name, user_message, system_prompt, db_context, temperatu
         return _call_gemini(messages, final_system_prompt, model_key=settings.DEFAULT_AI_MODEL, temperature=temperature)
     
     elif model_name == 'gpt':
-        # GPT는 문자열로 변환 필요 (향후 개선)
-        full_message = messages[-1]['parts'][0]['text'] if mode == 'v2' else user_message
-        return _call_gpt(full_message, enhanced_prompt, temperature=temperature)
+        # GPT Native History 적용
+        return _call_gpt(messages, final_system_prompt, temperature=temperature)
     
     elif model_name == 'claude':
-        # Claude는 문자열로 변환 필요 (향후 개선)
-        full_message = messages[-1]['parts'][0]['text'] if mode == 'v2' else user_message
-        return _call_claude(full_message, enhanced_prompt, temperature=temperature)
+        # Claude Native History 적용
+        return _call_claude(messages, final_system_prompt, temperature=temperature)
     
     elif model_name == 'all':
         # 멀티 모델은 문자열로 변환 필요 (향후 개선)
@@ -323,21 +310,28 @@ def _call_gemini(messages, system_prompt, model_key='gemini-pro', temperature=0.
         }
 
 
-def _call_gpt(full_message, system_prompt, temperature=0.7):
-    """GPT API 호출 (OpenAI)"""
+def _call_gpt(messages, system_prompt, temperature=0.7):
+    """GPT API 호출 (Native History 지원)"""
     if not settings.AI_MODELS['gpt']['enabled']:
         raise Exception("GPT not initialized")
     
     client = settings.GPT_CLIENT
-    model = settings.AI_MODELS['gpt']['model']  # 설정에서 모델명 가져오기
+    model = settings.AI_MODELS['gpt']['model']
     
     try:
+        # 시스템 프롬프트를 메시지 리스트의 시작에 추가
+        api_messages = [{"role": "system", "content": f"{system_prompt}\n\n반드시 다음 JSON 형식으로만 응답하세요:\n{json.dumps(settings.AI_RESPONSE_SCHEMA, ensure_ascii=False, indent=2)}"}]
+        
+        # 대화 이력을 변환하여 추가 (Gemini 형식 → OpenAI 형식)
+        for msg in messages:
+            # Gemini의 'model' 역할을 'assistant'로 변경
+            role = 'assistant' if msg['role'] == 'model' else msg['role']
+            content = msg['parts'][0]['text']
+            api_messages.append({"role": role, "content": content})
+        
         response = client.chat.completions.create(
-            model=model,  # 동적으로 설정된 모델 사용
-            messages=[
-                {"role": "system", "content": f"{system_prompt}\n\n반드시 다음 JSON 형식으로만 응답하세요:\n{json.dumps(settings.AI_RESPONSE_SCHEMA, ensure_ascii=False, indent=2)}"},
-                {"role": "user", "content": full_message}
-            ],
+            model=model,
+            messages=api_messages,  # Native History: 전체 메시지 리스트 전달
             temperature=temperature,
             response_format={"type": "json_object"}
         )
@@ -376,8 +370,8 @@ def _call_gpt(full_message, system_prompt, temperature=0.7):
         }
 
 
-def _call_claude(full_message, system_prompt, temperature=0.7):
-    """Claude API 호출"""
+def _call_claude(messages, system_prompt, temperature=0.7):
+    """Claude API 호출 (Native History 지원)"""
     if not settings.AI_MODELS['claude']['enabled']:
         raise Exception("Claude not initialized")
     
@@ -388,14 +382,20 @@ def _call_claude(full_message, system_prompt, temperature=0.7):
         # Claude는 JSON mode 직접 지원 안 함, system prompt에 JSON 요청 추가
         enhanced_prompt = f"{system_prompt}\n\n반드시 다음 JSON 형식으로만 응답하세요:\n{json.dumps(settings.AI_RESPONSE_SCHEMA, ensure_ascii=False, indent=2)}"
         
+        # 대화 이력을 변환하여 추가 (Gemini 형식 → Anthropic 형식)
+        api_messages = []
+        for msg in messages:
+            # Gemini의 'model' 역할을 'assistant'로 변경
+            role = 'assistant' if msg['role'] == 'model' else msg['role']
+            content = msg['parts'][0]['text']
+            api_messages.append({"role": role, "content": content})
+        
         response = client.messages.create(
             model=model,
             max_tokens=4096,
             temperature=temperature,
             system=enhanced_prompt,
-            messages=[
-                {"role": "user", "content": full_message}
-            ]
+            messages=api_messages  # Native History: 전체 메시지 리스트 전달
         )
         
         # JSON 파싱
