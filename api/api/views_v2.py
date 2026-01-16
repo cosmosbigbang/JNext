@@ -112,8 +112,9 @@ def chat_v2(request):
                     }
                 }, status=400)
             
-            print("[JNext v2] '정밀분석해' 감지. HINOBALANCE 프롬프트 사용.")
-            system_prompt_to_use = ai_config.HINOBALANCE_SYSTEM_PROMPT
+            print("[JNext v2] '정밀분석해' 감지. HINOBALANCE 프롬프트 사용 (최신 학습 반영).")
+            # 매 요청마다 최신 학습 내용 반영
+            system_prompt_to_use = ai_config.get_hinobalance_prompt(project_id)
         
         # 특수 명령어 "학습정리" 감지 (수동 요약)
         elif "학습정리" in user_message:
