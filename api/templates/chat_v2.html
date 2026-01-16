@@ -697,7 +697,7 @@
                     </div>
                     <div class="info-row">
                         <span class="info-label">Temperature</span>
-                        <span class="badge badge-temp" id="current-temp">0.90</span>
+                        <span class="badge badge-temp" id="current-temp">0.50</span>
                     </div>
                 </div>
 
@@ -862,9 +862,9 @@
         window.addEventListener('DOMContentLoaded', function() {
             // Temperature 슬라이더 초기화
             const tempSlider = document.getElementById('temp-slider');
-            tempSlider.value = 90;  // 0.9
-            document.getElementById('temp-value').textContent = '0.90';
-            document.getElementById('current-temp').textContent = '0.90';  // 배지 초기화
+            tempSlider.value = 50;  // 0.5
+            document.getElementById('temp-value').textContent = '0.50';
+            document.getElementById('current-temp').textContent = '0.50';  // 배지 초기화
             
             // DB 토글 초기화 (기본값: OFF)
             const dbToggle = document.getElementById('db-toggle');

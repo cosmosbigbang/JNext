@@ -16,6 +16,7 @@ from .core.context_manager import ContextManager
 from .projects.project_manager import project_manager
 from .ai_service import call_ai_model
 from .views import save_chat_history, load_chat_history, now_kst
+from . import ai_config # ai_config.py 임포트
 
 # 한국 시간대
 KST = timezone(timedelta(hours=9))
@@ -60,21 +61,23 @@ def chat_v2(request):
         # 요청 파싱
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
-        model = data.get('model', 'gemini-pro')  # 기본 Pro 유지 (품질 우선)
-        project_id = data.get('project', None)  # None = 일반 대화
-        temperature = float(data.get('temperature', 0.9))  # 0.9로 조정
         
-        # DB 사용 여부 (on/off)
-        use_db = data.get('db', False)  # 기본값: off
-        db_focus = 100 if use_db else 0
+        # 웹 UI는 'project'로 보내므로 둘 다 지원
+        project_id = data.get('project_id') or data.get('project')
+        model = data.get('model', 'gemini-pro')
         
+        # temperature와 db_focus는 ai_config.py와 사용자 요청에 따라 결정
+        # 기본값은 v2 설정 따름
+        temperature = data.get('temperature', ai_config.TEMPERATURE_SETTINGS.get('v2', 0.5))
+        db_focus = data.get('db_focus', 0) # 0 또는 100
+
         if not user_message:
             return JsonResponse({'error': 'Message is required'}, status=400)
         
         print(f"\n[JNext v2] User: {user_message}")
         print(f"[JNext v2] Project: {project_id or '일반 대화'}")
         print(f"[JNext v2] Temperature: {temperature}")
-        print(f"[JNext v2] DB: {'🟢 ON' if use_db else '⚫ OFF'}")
+        print(f"[JNext v2] DB Focus: {db_focus}%")
         print(f"[JNext v2] Model: {model}")
         
         # 1. 사용자 메시지 즉시 저장 (백업)
@@ -88,18 +91,38 @@ def chat_v2(request):
             project_context=project_id
         )
         
-        # 2. 대화 기록 로드 (모바일 AI 수준으로 확장)
+        # 2. 대화 기록 로드 (최근 100개)
         conversation_history = load_chat_history(limit=100)
         
-        # 3. 프로젝트 정보 가져오기
+        # 3. 프로젝트 정보 및 시스템 프롬프트 동적 선택
         project = None
         project_db_context = ""
-        project_prompt = ""
+        system_prompt_to_use = ai_config.GENERAL_SYSTEM_PROMPT
+
+        # 특수 명령어 "정밀분석해" 감지
+        if "정밀분석해" in user_message:
+            # 정밀분석은 프로젝트 선택 필수
+            if not project_id:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': '정밀분석은 프로젝트를 선택해야 합니다. 하이노밸런스 프로젝트를 선택해주세요.',
+                    'response': {
+                        'answer': '정밀분석 기능을 사용하려면 먼저 프로젝트(예: 하이노밸런스)를 선택해주세요.'
+                    }
+                }, status=400)
+            
+            print("[JNext v2] '정밀분석해' 감지. HINOBALANCE 프롬프트 사용.")
+            system_prompt_to_use = ai_config.HINOBALANCE_SYSTEM_PROMPT
         
         if project_id:
             project = project_manager.get_project(project_id)
             if project:
-                project_prompt = project.get_system_prompt()
+                # "정밀분석해"가 아닐 때만 프로젝트 기본 프롬프트 사용 고려
+                # (하지만 현재는 general / hinobalance로 양분)
+                if "정밀분석해" not in user_message:
+                    # 만약 프로젝트별 범용 프롬프트가 있다면 여기서 설정 가능
+                    # pass 
+                    print(f"[JNext v2] Project loaded: {project.display_name}")
                 
                 # DB Focus가 0%보다 클 때만 DB Context 가져오기
                 if db_focus > 0:
@@ -112,29 +135,17 @@ def chat_v2(request):
                     
                     project_db_context = project.get_db_context(limit=100, keyword=keyword)
                     
-                    print(f"[JNext v2] Project loaded: {project.display_name}")
-                    if keyword:
-                        print(f"[JNext v2] Keyword search: {keyword}")
                     print(f"[JNext v2] DB context length: {len(project_db_context)} chars")
-                    print(f"[JNext v2] DB context preview: {project_db_context[:200]}...")
+                    # print(f"[JNext v2] DB context preview: {project_db_context[:200]}...") # 너무 길어서 주석 처리
                 else:
                     print(f"[JNext v2] Project loaded: {project.display_name} (DB Context: 0%)")
             else:
                 print(f"[JNext v2] Warning: Project '{project_id}' not found")
         
-        # 4. 동적 맥락 구성
-        context = ContextManager.build_context(
-            temperature=temperature,
-            db_focus=db_focus,
-            project_id=project_id,
-            user_message=user_message,
-            conversation_history=conversation_history,
-            project_db_context=project_db_context,
-            project_prompt=project_prompt
-        )
+        # 4. AI 호출 (ContextManager 사용 안함, 직접 전달)
+        # ContextManager의 복잡한 가중치 로직 대신, 결정된 프롬프트를 직접 사용
         
-        print(f"[JNext v2] Context weights: {context['weights']}")
-        print(f"[JNext v2] Using Temperature: {context['temperature']}")
+        print(f"[JNext v2] Using Temperature: {temperature}")
         
         # 5. AI 호출 (재시도 로직 포함)
         ai_response = None
@@ -144,12 +155,12 @@ def chat_v2(request):
             try:
                 ai_response = call_ai_model(
                     model_name=model,
-                    user_message=user_message,  # 현재 질문만 (맥락 제거)
-                    system_prompt=context['system_prompt'],
-                    db_context=project_db_context if db_focus > 0 else "",  # DB Context 직접 전달
+                    user_message=user_message,
+                    system_prompt=system_prompt_to_use,
+                    db_context=project_db_context if db_focus > 0 else "",
                     mode='v2',
-                    conversation_history=conversation_history,  # 🔥 대화 이력 전체 전달!
-                    temperature=context['temperature']
+                    conversation_history=conversation_history,
+                    temperature=temperature
                 )
                 break
                 
@@ -170,14 +181,10 @@ def chat_v2(request):
         if ai_response:
             ai_answer = ai_response.get('answer', '')
             
-            # 마크다운 제거
-            ai_answer_clean = remove_markdown_formatting(ai_answer)
-            ai_response['answer'] = ai_answer_clean
-            
             # AI 응답 저장
             save_chat_history(
                 role='assistant',
-                content=ai_answer_clean,
+                content=ai_answer,
                 mode='v2',
                 model=model,
                 temperature=temperature,
@@ -185,43 +192,20 @@ def chat_v2(request):
                 project_context=project_id
             )
             
-            # Phase 3: 프로젝트 대화이면 가치 평가 및 RAW 저장
-            if project_id:
-                try:
-                    from .raw_storage import evaluate_chat_value, analyze_and_save_raw
-                    
-                    print(f"[JNext v2] RAW 저장 시도: project_id={project_id}")
-                    
-                    # 2단계: 가치 평가 (관대하게)
-                    is_valuable = evaluate_chat_value(user_message, ai_answer)
-                    
-                    if is_valuable:
-                        # 3단계: AI 분석 후 RAW 저장
-                        analyze_and_save_raw(
-                            project_id=project_id,
-                            user_message=user_message,
-                            ai_response=ai_answer_clean,
-                            chat_ref=chat_id,
-                            model=model
-                        )
-                        print(f"[JNext v2] RAW 저장 완료: {project_id}")
-                    else:
-                        print(f"[JNext v2] 잡담으로 판단, RAW 저장 스킵")
-                except Exception as e:
-                    import traceback
-                    print(f"[JNext v2] RAW 저장 실패: {e}")
-                    print(traceback.format_exc())
+            # Phase 3: 프로젝트 대화이면 가치 평가 및 RAW 저장 (현재는 비활성화)
+            # if project_id:
+            #     ...
             
             return JsonResponse({
                 'status': 'success',
-                'response': ai_response,
-                'context_info': {
-                    'project': project.display_name if project else '일반 대화',
+                'response': ai_answer,
+                'metadata': {
+                    'project_id': project_id,
                     'db_focus': db_focus,
                     'temperature': temperature,
-                    'weights': context['weights']
-                },
-                'model': model
+                    'model': model,
+                    'prompt_type': 'HINOBALANCE' if "정밀분석해" in user_message else 'GENERAL'
+                }
             })
         else:
             error_msg = f"AI 서비스 일시 중단 중입니다. ({str(error_occurred)[:100]})"
@@ -240,9 +224,6 @@ def chat_v2(request):
                 'message': error_msg,
                 'response': {
                     'answer': error_msg,
-                    'claims': [],
-                    'evidence': [],
-                    'confidence': 0.0
                 }
             }, status=500)
         
