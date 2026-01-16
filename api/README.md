@@ -4,20 +4,39 @@
 
 ```
 JNext/
-├── backend/
-│   ├── venv/                    # Python 가상환경
-│   ├── config/                  # Django 프로젝트 설정
-│   │   ├── settings.py         # Firebase 초기화 포함
-│   │   ├── urls.py             # API 라우팅
+├── api/                        # Django Backend
+│   ├── venv/                   # Python 가상환경
+│   ├── config/                 # Django 프로젝트 설정
+│   │   ├── settings.py        # Firebase 초기화 포함
+│   │   ├── urls.py            # API 라우팅
 │   │   └── wsgi.py
-│   ├── api/                    # API 앱
-│   │   ├── views.py           # Firebase 테스트 API
-│   │   └── ...
-│   ├── manage.py              # Django 관리 명령
-│   ├── requirements.txt       # Python 패키지 목록
-│   ├── .env                   # 환경 변수 (Git 제외)
-│   ├── .env.example           # 환경 변수 템플릿
-│   └── .gitignore
+│   ├── api/                   # API 앱
+│   │   ├── views.py          # API 엔드포인트
+│   │   ├── views_v2.py       # v2 채팅 API
+│   │   ├── ai_config.py      # AI 설정 중앙 관리
+│   │   └── projects/         # 프로젝트별 설정
+│   │       └── hinobalance.py
+│   ├── scripts/              # 범용 유틸리티
+│   │   ├── check/           # DB 상태 확인 스크립트
+│   │   ├── test/            # API 테스트 스크립트
+│   │   └── utils/           # 기타 유틸리티
+│   ├── manage.py            # Django 관리 명령
+│   ├── requirements.txt     # Python 패키지 목록
+│   └── .env                 # 환경 변수 (Git 제외)
+│
+├── projects/                 # 프로젝트별 데이터/스크립트
+│   └── hinobalance/         # 하이노밸런스 프로젝트
+│       ├── data/            # 원본 데이터
+│       │   ├── theory/      # 카테고리별 이론
+│       │   ├── exercises/   # 개별 운동 설명
+│       │   └── combined/    # 통합 이론 문서
+│       ├── scripts/         # 전용 스크립트
+│       │   ├── analyze.py
+│       │   ├── publishing.py
+│       │   ├── upload/      # Firestore 업로드
+│       │   └── organize/    # 데이터 정리
+│       └── docs/            # 프로젝트 문서
+│
 └── jnext-service-account.json  # Firebase 서비스 계정 키 (Git 제외)
 ```
 
