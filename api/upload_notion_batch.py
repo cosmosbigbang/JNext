@@ -124,10 +124,14 @@ def upload_to_firestore(exercise_name, filename, category):
     # 제목/내용 추출
     title, full_content = extract_title_and_content(content, exercise_name)
     
+    # 문서 타입 결정 (이론 vs 실전)
+    doc_type = "이론" if category == "하이노이론" else "실전"
+    
     # Firestore 문서 생성
     doc_data = {
         'title': title,
         'content': full_content,
+        'doc_type': doc_type,  # 이론/실전 구분
         'category': category,
         'exercise_name': exercise_name,
         'source': 'notion',

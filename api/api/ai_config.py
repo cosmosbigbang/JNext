@@ -19,16 +19,7 @@ TEMPERATURE_SETTINGS = {
     'v2': 0.5         # v2 기본값 (균형 잡힌 분석)
 }
 
-# 3. 하이노밸런스 System Prompt
-def get_hinobalance_prompt(project_id='hinobalance'):
-    """
-    하이노밸런스 프롬프트 + 최근 학습 내용
-    """
-    from .session_learning import load_recent_learning
-    
-    recent_learning = load_recent_learning(project_id, limit=3)
-    
-    base_prompt = """# JNext 스크립트 개발 프로젝트 (Phase 1: 하이노밸런스)
+HINOBALANCE_PROMPT_HEADER = """# JNext 스크립트 개발 프로젝트 (Phase 1: 하이노밸런스)
 
 너는 "JNext 스크립트"의 일부인 "하이노밸런스(HINOBALANCE)" 전담 분석 AI다.
 현재는 하이노밸런스에 특화된 스크립트를 개발 중이며, 이 경험은 향후 범용 스크립트 개발의 기반이 될 것이다.
@@ -38,26 +29,41 @@ def get_hinobalance_prompt(project_id='hinobalance'):
 **어떤 경우에도 예외 없이** 아래에 명시된 '답변 형식'을 따라야 한다. 형식 준수는 내용보다 우선된다.
 
 **중요: 답변은 반드시 마크다운 형식으로 작성하며, JSON 형식은 절대 사용하지 않는다.**"""
-    
-    if recent_learning:
-        learning_section = f"""
+
+
+def _build_recent_learning_section(project_id: str, limit: int = 3) -> str:
+   """세션 학습 내용을 불러와 섹션 문자열로 반환."""
+   if not project_id:
+      return ""
+   try:
+      from .session_learning import load_recent_learning  # 지연 임포트로 순환 방지
+
+      recent_learning = load_recent_learning(project_id, limit=limit)
+      if recent_learning:
+         return f"""
 
 ## 📚 최근 세션에서 학습한 내용
 {recent_learning}
 
 **위 학습 내용을 참고하여 J님의 선호도와 피드백을 반영하세요.**
 """
-        return base_prompt + learning_section + """
+   except Exception as exc:
+      print(f"[JNext] Warning: 세션 학습 내용을 불러오지 못했습니다: {exc}")
+   return ""
+
+
+def get_hinobalance_prompt(project_id: str = 'hinobalance') -> str:
+   """하이노밸런스 시스템 프롬프트를 동적으로 생성."""
+   prompt = HINOBALANCE_PROMPT_HEADER
+   prompt += _build_recent_learning_section(project_id)
+   prompt += """
 
 ## 🎯 핵심 철학"""
-    else:
-        return base_prompt + """
+   prompt += HINOBALANCE_PROMPT_INSTRUCTIONS
+   return prompt
 
-## 🎯 핵심 철학"""
 
-HINOBALANCE_SYSTEM_PROMPT_BASE = get_hinobalance_prompt()  # 기본 로드
-
-HINOBALANCE_SYSTEM_PROMPT = HINOBALANCE_SYSTEM_PROMPT_BASE + """
+HINOBALANCE_PROMPT_INSTRUCTIONS = """
 - 불균형은 오류가 아니라 **신호**
 - 균형은 목표가 아니라 **과정 중 잠시 나타나는 상태**
 - 움직임은 근육이 아니라 **신경계가 만든다**
@@ -176,6 +182,11 @@ HINOBALANCE_SYSTEM_PROMPT = HINOBALANCE_SYSTEM_PROMPT_BASE + """
 - 대화 이력에 나온 개념/용어를 절대 잊지 않는다
 - 근거 없는 추측은 하지 않는다 (대화 이력이나 DB에 없으면 "확실하지 않습니다")
 """
+
+
+HINOBALANCE_SYSTEM_PROMPT = HINOBALANCE_PROMPT_HEADER + """
+
+## 🎯 핵심 철학""" + HINOBALANCE_PROMPT_INSTRUCTIONS
 
 # 4. 일반 대화 System Prompt
 GENERAL_SYSTEM_PROMPT = """당신은 J님의 창의적 파트너 AI입니다. J님의 아이디어를 1차 증폭하여 RAW 데이터를 생성하는 역할입니다.

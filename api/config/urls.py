@@ -80,6 +80,7 @@ urlpatterns = [
     path('api/v2/documents/regenerate/', views_v2.regenerate_document, name='regenerate_document'),
     path('api/v2/documents/apply-regeneration/', views_v2.apply_regeneration, name='apply_regeneration'),
     path('api/v2/documents/combine/', views_v2.combine_documents, name='combine_documents'),
+    path('api/v2/documents/custom-organize/', views_v2.custom_organize_documents, name='custom_organize_documents'),
     path('api/v2/documents/delete/', views_v2.delete_documents, name='delete_documents'),
     path('api/v2/documents/move-to-final/', views_v2.move_to_final, name='move_to_final'),
     

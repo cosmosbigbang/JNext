@@ -355,6 +355,7 @@
             <div style="margin-left: auto; display: flex; gap: 10px;">
                 <button onclick="selectAll()">✅ 전체 선택</button>
                 <button onclick="combineSelected()">🔄 선택 문서 정리</button>
+                <button onclick="customOrganize()" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">✨ 자유 명령어로 정리</button>
                 <button class="danger" onclick="deleteSelected()">🗑️ 선택 삭제</button>
             </div>
         </div>
@@ -848,6 +849,68 @@
                 const result = await response.json();
                 if (result.status === 'success') {
                     alert(`✅ ${selectedDocs.length}개 문서가 정리되었습니다!`);
+                    searchDocuments();
+                } else {
+                    alert('❌ 정리 실패: ' + (result.error || result.message));
+                }
+            } catch (error) {
+                console.error('정리 실패:', error);
+                alert('❌ 정리 중 오류 발생');
+            }
+        }
+
+        // 자유 명령어로 정리 (신규 기능)
+        async function customOrganize() {
+            const checkboxes = document.querySelectorAll('.doc-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('❌ 정리할 문서를 선택해주세요');
+                return;
+            }
+
+            const selectedDocs = Array.from(checkboxes).map(cb => {
+                const idx = parseInt(cb.dataset.index);
+                const doc = allDocuments[idx];
+                return {
+                    collection: doc.collection,
+                    doc_id: doc.id
+                };
+            });
+            
+            // 자유 명령어 입력
+            const instruction = prompt(
+                `${selectedDocs.length}개 문서를 어떻게 정리할까요?\n\n예시:\n- "이론 부분만 추출해서 정리해줘"\n- "실전 운동으로만 재구성해줘"\n- "핵심 내용만 3가지로 요약해줘"\n- "초보자용으로 쉽게 풀어서 작성해줘"\n\n자유롭게 명령어를 입력하세요:`,
+                ''
+            );
+            if (!instruction || instruction.trim() === '') {
+                alert('❌ 명령어를 입력해주세요');
+                return;
+            }
+            
+            const title = prompt('정리된 문서의 제목:', '사용자 정의 정리 문서');
+            if (!title) return;
+            
+            const target = prompt('저장할 컬렉션 (raw/draft/final):', 'draft');
+            if (!['raw', 'draft', 'final'].includes(target)) {
+                alert('❌ 올바른 컬렉션을 선택해주세요');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/v2/documents/custom-organize/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        project: selectedProject,
+                        documents: selectedDocs,
+                        instruction: instruction,
+                        target: target,
+                        title: title
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert(`✅ ${selectedDocs.length}개 문서가 사용자 명령대로 정리되었습니다!\n\n명령어: ${instruction}`);
                     searchDocuments();
                 } else {
                     alert('❌ 정리 실패: ' + (result.error || result.message));

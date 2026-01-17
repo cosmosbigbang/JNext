@@ -14,7 +14,12 @@ KST = timezone(timedelta(hours=9))
 
 def evaluate_chat_value(user_message: str, ai_response: str) -> bool:
     """
-    응답 저장 여부 판단 (거의 모두 저장, 극소수만 스킵)
+    응답 저장 여부 판단 - 범용 필터링 (프로젝트 무관)
+    
+    철학:
+    - AI 자유도 최대 보장
+    - 프로젝트 확장성 확보
+    - 명백히 쓸모없는 것만 제거
     
     Args:
         user_message: 사용자 메시지 (참고용)
@@ -23,7 +28,6 @@ def evaluate_chat_value(user_message: str, ai_response: str) -> bool:
     Returns:
         bool: True (저장), False (스킵)
     """
-    # 명백한 시스템 에러만 스킵 (나머지는 모두 저장)
     
     # 1. 빈 응답
     if not ai_response or len(ai_response.strip()) < 10:
@@ -35,7 +39,19 @@ def evaluate_chat_value(user_message: str, ai_response: str) -> bool:
         print(f"[평가] API 에러 - 스킵")
         return False
     
-    # 나머지는 모두 저장 (품질은 analyze_and_save_raw에서 평가)
+    # 3. 일상 인사만 (의미 없음)
+    인사_패턴 = ["안녕하세요", "감사합니다", "네 알겠습니다", "좋은 하루", "또 뵙겠습니다"]
+    if any(pattern in ai_response for pattern in 인사_패턴) and len(ai_response) < 50:
+        print(f"[평가] 일상 인사만 - 스킵")
+        return False
+    
+    # 4. 확인 응답만 ("네", "알겠습니다" 등)
+    짧은_응답 = ["네", "네.", "알겠습니다", "알겠습니다.", "확인했습니다", "확인했습니다."]
+    if ai_response.strip() in 짧은_응답:
+        print(f"[평가] 확인 응답만 - 스킵")
+        return False
+    
+    # 나머지는 모두 저장 → AI 자유도 보장 ✅
     print(f"[평가] 저장 대상 ({len(ai_response)}자)")
     return True
 

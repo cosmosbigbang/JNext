@@ -227,7 +227,14 @@ CLAUDE_INITIALIZED = False
 if ANTHROPIC_API_KEY:
     try:
         import anthropic
-        CLAUDE_CLIENT = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        try:
+            CLAUDE_CLIENT = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        except TypeError as exc:
+            print(f"[JNext] Claude modern client init failed: {exc}. Trying legacy client...")
+            if hasattr(anthropic, 'Client'):
+                CLAUDE_CLIENT = anthropic.Client(api_key=ANTHROPIC_API_KEY)
+            else:
+                raise
         CLAUDE_INITIALIZED = True
         print(f"[JNext] Claude initialized successfully")
     except Exception as e:

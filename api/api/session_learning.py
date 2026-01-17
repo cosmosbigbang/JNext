@@ -3,8 +3,7 @@ AI 세션 학습 관리
 진, 젠의 학습 내용을 세션 간 보존
 """
 from firebase_admin import firestore
-from datetime import datetime
-from .ai_service import call_ai_model
+from datetime import datetime, timezone
 
 
 def save_session_learning(project_id, model, learning_summary):
@@ -48,25 +47,34 @@ def load_recent_learning(project_id, limit=5):
     """
     db = firestore.client()
     
-    docs = db.collection('session_learning')\
-        .where('project_id', '==', project_id)\
-        .order_by('timestamp', direction=firestore.Query.DESCENDING)\
-        .limit(limit)\
-        .stream()
-    
-    learning_texts = []
-    for doc in docs:
+    query = db.collection('session_learning').where('project_id', '==', project_id)
+    raw_docs = list(query.stream())
+
+    def _resolve_timestamp(data):
+        value = data.get('timestamp')
+        if isinstance(value, datetime):
+            return value
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+    entries = []
+    for doc in raw_docs:
         data = doc.to_dict()
+        entries.append(data)
+
+    if not entries:
+        return ""
+
+    entries.sort(key=_resolve_timestamp)
+    recent_entries = entries[-limit:] if limit else entries
+
+    learning_texts = []
+    for data in recent_entries:
         model_alias = data.get('model_alias', '')
         summary = data.get('summary', '')
         timestamp = data.get('timestamp', '')
-        
         learning_texts.append(f"[{model_alias} - {timestamp}]\n{summary}\n")
-    
-    if learning_texts:
-        return "\n".join(reversed(learning_texts))  # 시간순 정렬
-    else:
-        return ""
+
+    return "\n".join(learning_texts)
 
 
 def auto_summarize_learning(conversation_history, model, project_id):
@@ -105,6 +113,7 @@ def auto_summarize_learning(conversation_history, model, project_id):
 **간단 요약 (200자 이내)**:"""
     
     try:
+        from .ai_service import call_ai_model  # local import prevents circular dependency
         response = call_ai_model(
             model_name=model,
             user_message=summary_prompt,

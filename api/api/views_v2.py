@@ -215,8 +215,6 @@ def chat_v2(request):
             # 자동 학습 요약 체크 (10개마다)
             if project_id:
                 check_and_auto_summarize(conversation_history, model, project_id)
-                project_context=project_id
-            )
             
             # Phase 3: 프로젝트 대화이면 가치 평가 및 RAW 저장 (현재는 비활성화)
             # if project_id:
@@ -522,6 +520,7 @@ def search_documents(request):
                     category = data.get('카테고리') or data.get('category') or ''
                     exercise_name = data.get('exercise_name') or data.get('제목') or title or ''
                     keywords = data.get('키워드') or ''
+                    doc_type = data.get('doc_type') or ''  # 이론/실전 구분
                     
                     # 키워드가 리스트면 문자열로 변환
                     if isinstance(keywords, list):
@@ -540,6 +539,14 @@ def search_documents(request):
                         elif search_type == 'exercise':
                             # 운동명 검색
                             match = keyword_lower in exercise_name.lower()
+                        elif search_type == '이론':
+                            # 이론 문서만 검색 (doc_type="이론")
+                            match = (doc_type == "이론" and 
+                                    (keyword_lower in title.lower() or keyword_lower in content.lower()))
+                        elif search_type == '실전':
+                            # 실전 문서만 검색 (doc_type="실전")
+                            match = (doc_type == "실전" and 
+                                    (keyword_lower in title.lower() or keyword_lower in content.lower()))
                         elif search_type == 'keyword':
                             # 키워드 필드 검색
                             match = keyword_lower in keywords.lower()
@@ -994,6 +1001,121 @@ def combine_documents(request):
             'message': f'{len(source_docs)}개 문서가 정리되었습니다.',
             'doc_id': new_doc_id,
             'collection': target
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def custom_organize_documents(request):
+    """
+    자유 명령어로 문서 정리 API (신규)
+    POST /api/v2/documents/custom-organize/
+    
+    Body:
+        {
+            "project": "hinobalance",
+            "documents": [
+                {"collection": "raw", "doc_id": "abc123"},
+                {"collection": "draft", "doc_id": "def456"}
+            ],
+            "instruction": "이론 부분만 추출해서 정리해줘",
+            "target": "draft",
+            "title": "이론 정리본"
+        }
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        project_id = data.get('project')
+        documents = data.get('documents', [])
+        instruction = data.get('instruction', '')
+        target = data.get('target', 'draft')
+        title = data.get('title', '사용자 정의 정리본')
+        
+        if not project_id or not documents or not instruction:
+            return JsonResponse({'error': 'project, documents, instruction required'}, status=400)
+        
+        # 문서들 가져오기
+        db = firestore.client()
+        source_docs = []
+        
+        for doc_info in documents:
+            col = doc_info.get('collection')
+            doc_id = doc_info.get('doc_id')
+            
+            doc_ref = db.collection('projects').document(project_id).collection(col).document(doc_id)
+            doc = doc_ref.get()
+            
+            if doc.exists:
+                doc_data = doc.to_dict()
+                source_docs.append({
+                    'collection': col,
+                    'doc_id': doc_id,
+                    '제목': doc_data.get('제목', ''),
+                    '내용': doc_data.get('전체글', doc_data.get('내용', '')),
+                    'J님원본': doc_data.get('J님원본', '')
+                })
+        
+        if not source_docs:
+            return JsonResponse({'error': '유효한 문서가 없습니다'}, status=404)
+        
+        # AI로 사용자 명령대로 정리
+        combined_content = "\n\n=== 문서 구분선 ===\n\n".join([
+            f"[문서 {idx+1}] {doc.get('제목', 'N/A')}\n\n{doc.get('내용', '')}"
+            for idx, doc in enumerate(source_docs)
+        ])
+        
+        prompt = f"""다음 {len(source_docs)}개 문서를 사용자의 명령대로 정리해주세요.
+
+【사용자 명령어】
+{instruction}
+
+【원본 문서들】
+{combined_content}
+
+사용자의 명령을 정확히 따라 문서를 정리해주세요."""
+        
+        project = project_manager.get_project(project_id)
+        system_prompt = project.get_system_prompt() if project else ""
+        
+        ai_response = call_ai_model(
+            model_name='gemini-pro',
+            user_message=prompt,
+            system_prompt=system_prompt,
+            db_context="",
+            mode='v2',
+            conversation_history=[],
+            temperature=0.7
+        )
+        
+        # 새 문서 저장
+        new_doc = {
+            '제목': title,
+            '전체글': ai_response.get('answer', ''),
+            '원본문서수': len(source_docs),
+            '생성일': now_kst(),
+            '종류': '사용자정의정리본',
+            '사용자명령': instruction,
+            '원본문서': [f"{d['collection']}/{d['doc_id']}" for d in source_docs]
+        }
+        
+        new_ref = db.collection('projects').document(project_id).collection(target).add(new_doc)
+        new_doc_id = new_ref[1].id
+        
+        print(f"[자유 명령어 정리] {len(source_docs)}개, 명령: '{instruction}' → projects/{project_id}/{target}/{new_doc_id}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'{len(source_docs)}개 문서가 사용자 명령대로 정리되었습니다.',
+            'doc_id': new_doc_id,
+            'collection': target,
+            'instruction': instruction
         })
         
     except Exception as e:

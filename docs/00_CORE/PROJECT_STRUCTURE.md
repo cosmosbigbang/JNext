@@ -1,7 +1,7 @@
 # JNext 프로젝트 구조 문서
 
-**최종 업데이트**: 2026-01-16 14:30  
-**버전**: 2.0 (리팩터링 완료)
+**최종 업데이트**: 2026-01-16 17:30  
+**버전**: 2.1 (세션 학습 시스템 추가)
 
 ---
 
@@ -29,11 +29,12 @@ api/
 ├── api/                       # Django 앱
 │   ├── views.py              # 기본 API
 │   ├── views_v2.py           # v2 채팅 API (정밀분석)
-│   ├── ai_config.py          # AI 설정 중앙 관리
-│   ├── ai_service.py         # AI 모델 호출
+│   ├── ai_config.py          # AI 설정 중앙 관리 ⭐
+│   ├── ai_service.py         # AI 모델 호출 (Native History)
+│   ├── session_learning.py   # 세션 학습 관리 ⭐ NEW
 │   ├── db_service.py         # Firestore 연동
 │   ├── core/                 # 핵심 모듈
-│   │   └── context_manager.py # Native History 관리
+│   │   └── context_manager.py
 │   ├── projects/             # 프로젝트별 설정
 │   │   ├── base.py
 │   │   ├── hinobalance.py
@@ -69,29 +70,67 @@ api/
 
 ### 핵심 파일
 
-#### ai_config.py
+#### ai_config.py ⭐
 ```python
+# 1. 모델 별명
 MODEL_ALIASES = {
     'gemini-pro': '젠',
     'gpt': '진',
     'claude': '클로'
 }
 
+# 2. Temperature 설정
 TEMPERATURE_SETTINGS = {
+    'organize': 0.3,
+    'hybrid': 0.5,
+    'analysis': 0.7,
     'v2': 0.5  # 정밀분석 기본값
 }
 
-HINOBALANCE_SYSTEM_PROMPT = """..."""  # 7개 항목 강제
-GENERAL_SYSTEM_PROMPT = """..."""      # 일반 대화
+# 3. 동적 프롬프트 (최신 학습 반영)
+def get_hinobalance_prompt(project_id='hinobalance'):
+    from .session_learning import load_recent_learning
+    recent_learning = load_recent_learning(project_id, limit=3)
+    return base_prompt + learning_section + ...
+
+# 4. 시스템 프롬프트
+HINOBALANCE_SYSTEM_PROMPT = get_hinobalance_prompt()  # 7개 항목 강제
+GENERAL_SYSTEM_PROMPT = """..."""  # 일반 대화
+```
+
+#### session_learning.py ⭐ NEW
+```python
+def save_session_learning(project_id, model, learning_summary)
+    # Firestore session_learning 컬렉션에 저장
+
+def load_recent_learning(project_id, limit=3)
+    # 최근 3개 학습 내용 로드 → 프롬프트에 주입
+
+def auto_summarize_learning(conversation_history, model, project_id)
+    # 대화 10개 기반으로 AI가 자동 요약
+    # 1. J님 선호 표현 방식
+    # 2. 반복 피드백 패턴
+    # 3. 개선 요청 사항
+    # 4. 다음 세션 참고 포인트
+
+def check_and_auto_summarize(conversation_history, model, project_id)
+    # 대화 10개마다 자동 실행
 ```
 
 #### views_v2.py
 ```python
-# "정밀분석해" 감지
+# 특수 명령어 "정밀분석해" 감지
 if "정밀분석해" in user_message:
-    system_prompt = ai_config.HINOBALANCE_SYSTEM_PROMPT
-else:
-    system_prompt = ai_config.GENERAL_SYSTEM_PROMPT
+    # 매 요청마다 최신 학습 반영
+    system_prompt_to_use = ai_config.get_hinobalance_prompt(project_id)
+
+# 특수 명령어 "학습정리" 감지
+elif "학습정리" in user_message:
+    summary = auto_summarize_learning(conversation_history, model, project_id)
+    return JsonResponse({'answer': f"✅ 학습 저장 완료\n\n{summary}"})
+
+# 응답 후 자동 학습 체크 (10개마다)
+check_and_auto_summarize(conversation_history, model, project_id)
 ```
 
 ---
@@ -209,12 +248,16 @@ projects/
 │   ├── raw/                 # AI 초안 저장
 │   ├── draft/               # 개선 필요 문서
 │   └── final/               # 출판 완료 문서
-├── exam_navi/
-└── jbody/
 
 chat_history/                # 채팅 기록 (Native History)
-├── {session_id}/
-│   └── messages/
+
+session_learning/            # 세션 학습 ⭐ NEW
+├── {doc_id}/
+│   ├── project_id: "hinobalance"
+│   ├── model: "gemini-pro"
+│   ├── model_alias: "젠"
+│   ├── summary: "J님이 선호하는 방식..."
+│   └── timestamp: datetime
 ```
 
 ### 문서 구조 (hinobalance)
@@ -238,15 +281,45 @@ chat_history/                # 채팅 기록 (Native History)
 
 ## 🔄 워크플로우
 
-### 1. 데이터 입력 (Phase 1)
+### 1. 세션 학습 흐름 ⭐ NEW
+```
+대화 10개 축적
+    ↓
+auto_summarize_learning() 자동 실행
+    ↓
+AI가 대화 분석하여 요약
+    ↓
+Firestore session_learning 컬렉션 저장
+    ↓
+다음 "정밀분석해" 시 get_hinobalance_prompt()에서 자동 로드
+    ↓
+최근 3개 학습 내용 프롬프트에 주입
+```
+
+### 2. 데이터 입력 (Phase 1)
 ```
 운동 설명 입력
     ↓
 "정밀분석해" 명령
     ↓
+get_hinobalance_prompt() 실행 → 최신 학습 반영
+    ↓
 AI가 7개 항목 생성
     ↓
 raw 컬렉션 저장
+    ↓
+대화 10개 도달 시 자동 학습 저장
+```
+
+### 3. 수동 학습 정리
+```
+J님: "학습정리"
+    ↓
+auto_summarize_learning() 즉시 실행
+    ↓
+현재까지 대화 기록 기반 요약
+    ↓
+Firestore 저장 + 요약 내용 출력
 ```
 
 ### 2. 문서 정리 (Phase 2)
@@ -298,22 +371,23 @@ python scripts/test/test_v2_chat.py
 
 ## 📈 버전 히스토리
 
-### v2.0 (2026-01-16)
+### v2.1 (2026-01-16 17:30) ⭐ NEW
+- ✅ 세션 학습 시스템 구현 (session_learning.py)
+- ✅ 자동 요약 (10개 대화마다)
+- ✅ 수동 정리 ("학습정리" 명령)
+- ✅ 프롬프트 동적 로드 (get_hinobalance_prompt)
+- ✅ Circular import 해결 (lazy import)
+
+### v2.0 (2026-01-16 14:30)
 - ✅ 폴더 기반 구조로 리팩터링
 - ✅ projects/hinobalance/ 분리
 - ✅ api/scripts/ 범용 유틸 정리
-- ✅ 경로 수정 및 검증 완료
 
 ### v1.5 (2026-01-16)
 - ✅ "정밀분석해" 특수 명령어
 - ✅ 7개 항목 응답 형식 강제
 - ✅ Temperature 0.5 조정
-- ✅ Native History 적용
-
-### v1.0 (2026-01-15)
-- ✅ Django + Firebase 기본 구조
-- ✅ 3개 AI 모델 통합
-- ✅ 프로젝트 매니저 구현
+- ✅ Native History 적용 (Gemini/GPT/Claude)
 
 ---
 
@@ -326,6 +400,6 @@ python scripts/test/test_v2_chat.py
 
 ---
 
-**최종 업데이트**: 2026-01-16 14:30  
-**총 파일 수**: 150+ (리팩터링 후)  
-**프로젝트 상태**: ✅ Phase 1 준비 완료
+**최종 업데이트**: 2026-01-16 17:30  
+**총 파일 수**: 150+  
+**프로젝트 상태**: ✅ 세션 학습 시스템 완성, Phase 1 준비 완료
