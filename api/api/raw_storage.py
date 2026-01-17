@@ -116,12 +116,6 @@ AI: {ai_response}
                 metadata[key] = re.sub(ai_self_refs, '', metadata[key], flags=re.IGNORECASE)
                 metadata[key] = re.sub(r'\s+', ' ', metadata[key]).strip()  # 공백 정리
         
-        # 하이노밸런스 작명법: 제목 전체 붙여쓰기 (띄어쓰기 제거)
-        if '제목' in metadata:
-            title = metadata['제목']
-            # 모든 띄어쓰기 제거
-            metadata['제목'] = title.replace(' ', '')
-        
         # 🔍 품질 검증: 일반론/엉터리 감지 (강화)
         quality_issues = []
         
